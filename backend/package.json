@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/server.js",
+    "dev": "node  src/server.js",
     "start": "node src/server.js"
   },
   "dependencies": {
@@ -13,6 +13,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "image-size": "^2.0.4",
     "langchain": "^1.0.0"
   }
 }
