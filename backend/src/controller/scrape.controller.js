@@ -9,7 +9,10 @@ export async function scrapeController(request, response) {
 
   try {
     const result = await adGraph.invoke({ url, aspectRatio });
-    return response.json(result.scraped);
+    return response.json({
+      scraped: result.scraped,
+      stockImages: result.stockImages,
+    });
   } catch (error) {
     console.error('Scrape workflow failed:', error);
     const message = error instanceof Error ? error.message : 'Unable to scrape the requested URL.';

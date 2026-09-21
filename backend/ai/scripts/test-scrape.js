@@ -11,6 +11,7 @@ const result = await adGraph.invoke({ url });
 const { scraped } = result;
 
 console.log({
+  stockImages: result.stockImages,
   images: scraped.images,
   logo: scraped.logo,
   brandColor: scraped.brandColor,
