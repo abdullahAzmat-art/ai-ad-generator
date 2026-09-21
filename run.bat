@@ -1,5 +1,5 @@
 @echo off
 setlocal
-cd /d "%~dp0frontend"
-call npm run dev
+start "US Client Vibe Backend" /D "%~dp0backend" cmd /k npm run dev
+start "US Client Vibe Frontend" /D "%~dp0frontend" cmd /k npm run dev
 endlocal
