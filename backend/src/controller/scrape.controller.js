@@ -12,6 +12,7 @@ export async function scrapeController(request, response) {
     return response.json({
       scraped: result.scraped,
       stockImages: result.stockImages,
+      script: result.script,       // { scenes: [3], brandColor, format }
     });
   } catch (error) {
     console.error('Scrape workflow failed:', error);

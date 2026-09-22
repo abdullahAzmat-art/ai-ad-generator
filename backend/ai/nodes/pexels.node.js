@@ -1,79 +1,80 @@
 import 'dotenv/config';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { HumanMessage } from '@langchain/core/messages';
+import { StringOutputParser } from '@langchain/core/output_parsers';
+
+// ─── Node ─────────────────────────────────────────────────────────────────────
 
 export async function pexelsNode(state) {
   const { scraped, aspectRatio } = state;
-  const geminiKey = process.env.GEMINI_API_KEY;
   const pexelsKey = process.env.PEXELS_API_KEY;
-  
+
   if (!pexelsKey) {
-    console.warn("[Pexels Node] PEXELS_API_KEY is missing. Skipping stock image fetch.");
+    console.warn('[Pexels Node] PEXELS_API_KEY missing — skipping.');
     return { stockImages: [] };
   }
 
-  let category = "business"; // fallback category
+  // ── 1. Ask Gemini for the best search category ───────────────────────────
+  let category = 'business'; // safe fallback
 
-  // 1. Identify category using Gemini 2.5 Flash-Lite
-  if (geminiKey && scraped) {
+  if (process.env.GEMINI_API_KEY && scraped) {
+    // LangChain chain: model | string parser  (no manual fetch, no response drilling)
+    const model = new ChatGoogleGenerativeAI({
+      model      : 'gemini-2.5-flash-lite',
+      apiKey     : process.env.GEMINI_API_KEY,
+      temperature: 0.1,
+      maxOutputTokens: 20,
+    });
+
+    const chain = model.pipe(new StringOutputParser());
+
     const prompt = `
-Based on the following scraped website data, identify the main business category or best single search term for stock images (e.g., "gym", "restaurant", "lawyer", "dentist", "coffee shop"). 
-Only output the exact search term, nothing else. Do not use quotes or punctuation.
+Based on this scraped website data, output the single best Pexels search term
+(e.g. "gym", "restaurant", "lawyer", "dentist", "coffee shop").
+Output ONLY the search term — no quotes, no punctuation, nothing else.
 
-Title: ${scraped.title || ''}
-Description: ${scraped.description || ''}
-Text snippet: ${(scraped.pageText || '').substring(0, 500)}
-`;
+Title       : ${scraped.title || ''}
+Description : ${scraped.description || ''}
+Text snippet: ${(scraped.pageText || '').slice(0, 500)}
+`.trim();
+
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${geminiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 20, temperature: 0.1 }
-        })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          category = text.trim().replace(/[^a-zA-Z0-9\s]/g, '');
-        }
-      } else {
-        console.error("[Pexels Node] Gemini API error:", await response.text());
-      }
-    } catch (error) {
-      console.error("[Pexels Node] Error calling Gemini API:", error);
+      const raw = await chain.invoke([new HumanMessage(prompt)]);
+      const cleaned = raw.trim().replace(/[^a-zA-Z0-9\s]/g, '');
+      if (cleaned) category = cleaned;
+    } catch (err) {
+      console.error('[Pexels Node] Gemini category call failed:', err.message);
     }
   }
 
-  console.log(`[Pexels Node] Searching Pexels for category: "${category}"`);
+  console.log(`[Pexels Node] Searching Pexels for: "${category}"`);
 
-  // 2. Search Pexels for images
+  // ── 2. Fetch stock photos from Pexels ────────────────────────────────────
+  const orientation =
+    aspectRatio === '16:9' ? 'landscape' :
+    aspectRatio === '1:1'  ? 'square'    :
+    'portrait';
+
   const stockImages = [];
-  try {
-    // Map the requested aspect ratio to a Pexels orientation
-    const orientation = aspectRatio === "16:9" ? "landscape" : aspectRatio === "1:1" ? "square" : "portrait";
-    
-    const pexelsRes = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(category)}&per_page=3&orientation=${orientation}`, {
-      headers: {
-        Authorization: pexelsKey
-      }
-    });
 
-    if (pexelsRes.ok) {
-      const pexelsData = await pexelsRes.json();
-      if (pexelsData.photos && pexelsData.photos.length > 0) {
-        // Use large2x or large images for better quality
-        stockImages.push(...pexelsData.photos.map(p => p.src.large2x || p.src.large || p.src.original));
-      }
+  try {
+    const res = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(category)}&per_page=3&orientation=${orientation}`,
+      { headers: { Authorization: pexelsKey } }
+    );
+
+    if (res.ok) {
+      const data = await res.json();
+      stockImages.push(
+        ...(data.photos ?? []).map(p => p.src.large2x || p.src.large || p.src.original)
+      );
     } else {
-      console.error("[Pexels Node] Pexels API error:", await pexelsRes.text());
+      console.error('[Pexels Node] Pexels API error:', await res.text());
     }
-  } catch (error) {
-    console.error("[Pexels Node] Error calling Pexels API:", error);
+  } catch (err) {
+    console.error('[Pexels Node] Pexels fetch failed:', err.message);
   }
 
   console.log(`[Pexels Node] Found ${stockImages.length} stock images.`);
-
   return { stockImages };
 }

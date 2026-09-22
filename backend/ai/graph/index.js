@@ -1,42 +1,143 @@
-/**
- * ============================================================
- *  AD GENERATOR: GRAPH BLUEPRINT      [x] built   [ ] todo
- * ============================================================
- *
- *  START
- *    |
- *    v
- *  [x] scrape ............ Firecrawl -> title, text, images, logo, color
- *    |
- *    v
- *  [x] route_images ...... 3+ good images?
- *    | yes ---------------------------+
- *    | no                             |
- *    v                                |
- *  [x] pexels ............ add stock photos
- *    |                                |
- *    +----------------+---------------+
- *                     v
- *  [x] draft ............. Gemini writes the 3-scene script
- *    |
- *    v
- *  [ ] review ............ rules + critic
- *    | issues (max 2 tries) --> back to draft
- *    | approved
- *    v
- *  [ ] render ............ JSON2Video
- *    | fails twice --> END (error)
- *    v
- *  [ ] human_review ...... PAUSE (interrupt): user approves or edits
- *    | edits --> apply_edits --> back to render
- *    | approve
- *    v
- *  [ ] finalize .......... save the final result
- *    |
- *    v
- *   END
- */
-
+          //                ┌───────────────┐
+          //                │     START     │
+          //                └───────┬───────┘
+          //                        │
+          //                        ▼
+          //     ┌─────────────────────────────────┐
+          //     │  SCRAPE                         │
+          //     │  Firecrawl                     │
+          //     │                                 │
+          //     │  • title                        │
+          //     │  • text                         │
+          //     │  • images                       │
+          //     │  • logo                         │
+          //     │  • colors                       │
+          //     └───────────────┬─────────────────┘
+          //                     │
+          //                     ▼
+          //     ┌─────────────────────────────────┐
+          //     │  ROUTE IMAGES                  │
+          //     │                                 │
+          //     │  Are there 3+ good images?     │
+          //     └───────────────┬─────────────────┘
+          //                     │
+          //           ┌─────────┴─────────┐
+          //           │                   │
+          //          YES                  NO
+          //           │                   │
+          //           │                   ▼
+          //           │    ┌─────────────────────────┐
+          //           │    │  PEXELS                 │
+          //           │    │                         │
+          //           │    │  Add stock photos       │
+          //           │    └────────────┬────────────┘
+          //           │                 │
+          //           └────────┬────────┘
+          //                    │
+          //                    ▼
+          //     ┌─────────────────────────────────┐
+          //     │  DRAFT                          │
+          //     │                                 │
+          //     │  Gemini                         │
+          //     │                                 │
+          //     │  Generate 3-scene ad script     │
+          //     └───────────────┬─────────────────┘
+          //                     │
+          //                     ▼
+          //     ┌─────────────────────────────────┐
+          //     │  REVIEW                         │
+          //     │                                 │
+          //     │  • Rules check                  │
+          //     │  • Critic                       │
+          //     │  • Quality validation           │
+          //     └───────────────┬─────────────────┘
+          //                     │
+          //           ┌─────────┴──────────┐
+          //           │                    │
+          //        ISSUES                APPROVED
+          //           │                    │
+          //           ▼                    │
+          //    ┌──────────────┐            │
+          //    │ Retry count  │            │
+          //    │   < 2 ?      │            │
+          //    └──────┬───────┘            │
+          //           │                    │
+          //      YES  │  NO                │
+          //           │   │                │
+          //           │   ▼                │
+          //           │  ┌──────────────┐  │
+          //           │  │     END      │  │
+          //           │  │    ERROR     │  │
+          //           │  └──────────────┘  │
+          //           │                    │
+          //           └──────► DRAFT ◄─────┘
+          //                                │
+          //                                ▼
+          //     ┌─────────────────────────────────┐
+          //     │  RENDER                         │
+          //     │                                 │
+          //     │  JSON2Video                     │
+          //     │                                 │
+          //     │  Generate video                 │
+          //     └───────────────┬─────────────────┘
+          //                     │
+          //                ┌────┴────┐
+          //                │         │
+          //              SUCCESS    FAIL
+          //                │         │
+          //                │         ▼
+          //                │   ┌──────────────┐
+          //                │   │ Retry count  │
+          //                │   │   < 2 ?      │
+          //                │   └──────┬───────┘
+          //                │          │
+          //                │     YES  │  NO
+          //                │          │   │
+          //                │          │   ▼
+          //                │          │ ┌──────────────┐
+          //                │          │ │     END      │
+          //                │          │ │    ERROR     │
+          //                │          │ └──────────────┘
+          //                │          │
+          //                │          └──► RENDER
+          //                │
+          //                ▼
+          //     ┌─────────────────────────────────┐
+          //     │  HUMAN REVIEW                   │
+          //     │                                 │
+          //     │  ⏸ INTERRUPT / PAUSE           │
+          //     │                                 │
+          //     │  User reviews generated ad      │
+          //     └───────────────┬─────────────────┘
+          //                     │
+          //           ┌─────────┴─────────┐
+          //           │                   │
+          //         EDIT                 APPROVE
+          //           │                   │
+          //           ▼                   │
+          // ┌─────────────────────┐       │
+          // │  APPLY EDITS        │       │
+          // │                     │       │
+          // │  Update scenes /    │       │
+          // │  text / images      │       │
+          // └──────────┬──────────┘       │
+          //            │                  │
+          //            └──────► RENDER ◄──┘
+          //                               │
+          //                               ▼
+          //                ┌────────────────────────┐
+          //                │       FINALIZE         │
+          //                │                        │
+          //                │  Save final result     │
+          //                │  • video URL           │
+          //                │  • scenes              │
+          //                │  • metadata            │
+          //                └────────────┬───────────┘
+          //                             │
+          //                             ▼
+          //                     ┌───────────────┐
+          //                     │      END      │
+          //                     └───────────────┘
 import { END, START, StateGraph } from '@langchain/langgraph';
 import { AdState } from '../state/ad.state.js';
 import { scrapeNode } from '../nodes/scrape.node.js';
