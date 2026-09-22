@@ -10,22 +10,24 @@ const hex = z
   .regex(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, 'must be a hex color');
 
 const SceneSchema = z.object({
-  id       : z.enum(['scene-1', 'scene-2', 'scene-3']),
-  angle    : z.string().min(1),
-  headline : z.string().min(1),   // required — no default
-  body     : z.string().min(1),   // required — no default
-  cta      : z.string().min(1).default('Learn More'),
-  imageUrl : z.string().default(''),
-  bgFrom   : hex.default('#0a1945'),
-  bgTo     : hex.default('#040a1d'),
-  textColor: hex.default('#ffffff'),
-  ctaBg    : hex.default('#10B981'),
-  ctaText  : hex.default('#ffffff'),
+  id         : z.enum(['scene-1', 'scene-2', 'scene-3']),
+  angle      : z.string().min(1),
+  headline   : z.string().min(1),
+  body       : z.string().min(1),
+  cta        : z.string().min(1).default('Learn More'),
+  imageIndex : z.number().int().min(0).default(0),
+  durationSec: z.number().min(2).max(8).default(4),
+  voiceover  : z.string().min(1),
+  bgFrom     : hex.default('#0a1945'),
+  bgTo       : hex.default('#040a1d'),
+  textColor  : hex.default('#ffffff'),
+  ctaBg      : hex.default('#10B981'),
+  ctaText    : hex.default('#ffffff'),
 });
 
 const ScriptSchema = z.object({
   brandColor: hex.default('#10B981'),
-  scenes    : z.array(SceneSchema).length(3),  // exactly 3, hard error if not
+  scenes    : z.array(SceneSchema).length(3),
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -36,11 +38,23 @@ function toFormat(aspectRatio) {
   return 'story';
 }
 
-function buildPrompt(scraped, allImages, aspectRatio) {
+function buildPrompt(scraped, allImages, aspectRatio, feedback, previousScript) {
   const { title = '', description = '', pageText = '', brandColor = '#10B981' } = scraped;
   const imageList = allImages.length
-    ? allImages.map((u, i) => `${i + 1}. ${u}`).join('\n')
-    : '(no images available — use imageUrl: "")';
+    ? allImages.map((u, i) => `${i}. ${u}`).join('\n')
+    : '(no images available — use imageIndex: 0)';
+
+  let feedbackSection = '';
+  if (feedback && feedback.length > 0) {
+    feedbackSection = `
+=== FEEDBACK FROM PREVIOUS ATTEMPT ===
+Your previous attempt had these problems, fix ALL of them:
+${feedback.join('\n')}
+
+Previous script:
+${JSON.stringify(previousScript, null, 2)}
+`;
+  }
 
   return `
 You are a world-class performance-marketing copywriter.
@@ -53,30 +67,41 @@ Page text   : ${pageText.slice(0, 2000)}
 Brand color : ${brandColor}
 Aspect ratio: ${aspectRatio}
 
-=== AVAILABLE IMAGES (pick a different URL for each scene) ===
+=== AVAILABLE IMAGES (pick a different imageIndex for each scene) ===
 ${imageList}
-
+${feedbackSection}
 === RULES ===
 1. Each scene must have a DIFFERENT angle (Hook / Social Proof / Urgency / Pain Point / Feature Focus / Direct Response).
 2. Headlines must be SPECIFIC to this brand — never generic.
 3. Derive bgFrom/bgTo gradients from the brand color (${brandColor}).
 4. Ensure readable contrast between textColor and the gradient.
+5. Only use facts from the brand data above. Never invent prices, discounts, or claims not stated in the page text.
+6. voiceover must fit durationSec at ~2.5 words per second max.
+7. Total duration across all 3 scenes must be 12-18 seconds.
+8. imageIndex must be a number from the list above, not a URL.
 `.trim();
 }
 
 // ─── Node ─────────────────────────────────────────────────────────────────────
 
 export async function draftNode(state) {
-  const { scraped, stockImages = [], aspectRatio = '9:16' } = state;
+  const { 
+    scraped, 
+    stockImages = [], 
+    aspectRatio = '9:16',
+    feedback = [],
+    script: previousScript = null,
+    iterations = 0
+  } = state;
 
   if (!process.env.GEMINI_API_KEY) {
     console.warn('[Draft Node] GEMINI_API_KEY missing — returning null script.');
-    return { script: null };
+    return { script: null, error: 'GEMINI_API_KEY missing' };
   }
 
   if (!scraped) {
     console.warn('[Draft Node] No scraped data — returning null script.');
-    return { script: null };
+    return { script: null, error: 'No scraped data' };
   }
 
   // Deduplicate scraped + stock images
@@ -91,9 +116,10 @@ export async function draftNode(state) {
   }).withStructuredOutput(ScriptSchema, { name: 'script' });
 
   let script = null;
+  let error = null;
 
   try {
-    const prompt = buildPrompt(scraped, allImages, aspectRatio);
+    const prompt = buildPrompt(scraped, allImages, aspectRatio, feedback, previousScript);
 
     // LangChain handles the API call, JSON extraction, and Zod parsing
     const result = await model.invoke([new HumanMessage(prompt)]);
@@ -111,13 +137,19 @@ export async function draftNode(state) {
 
   } catch (err) {
     if (err instanceof z.ZodError) {
-      console.error('[Draft Node] Zod validation failed:',
-        JSON.stringify(err.flatten().fieldErrors, null, 2));
+      const issues = err.flatten().fieldErrors;
+      error = 'Zod validation failed: ' + JSON.stringify(issues);
+      console.error('[Draft Node] Zod validation failed:', JSON.stringify(issues, null, 2));
     } else {
+      error = err.message;
       console.error('[Draft Node] Failed:', err.message);
     }
     script = null;
   }
 
-  return { script };
+  if (error) {
+    return { script: null, error };
+  }
+
+  return { script, iterations };
 }
