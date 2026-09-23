@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { z } from 'zod';
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { HumanMessage } from '@langchain/core/messages';
+import { getOpenRouterClient } from '../lib/openrouter.js';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
 // ─── Zod Schema ────────────────────────────────────────────────────────────────
 
@@ -94,9 +94,9 @@ export async function draftNode(state) {
     iterations = 0
   } = state;
 
-  if (!process.env.GEMINI_API_KEY) {
-    console.warn('[Draft Node] GEMINI_API_KEY missing — returning null script.');
-    return { script: null, error: 'GEMINI_API_KEY missing' };
+  if (!process.env.OPENROUTER_API_KEY) {
+    console.warn('[Draft Node] OPENROUTER_API_KEY missing — returning null script.');
+    return { script: null, error: 'OPENROUTER_API_KEY missing' };
   }
 
   if (!scraped) {
@@ -108,21 +108,37 @@ export async function draftNode(state) {
   const allImages = [...new Set([...(scraped.images ?? []), ...stockImages])];
   console.log(`[Draft Node] ${allImages.length} images, aspect: ${aspectRatio}`);
 
-  // ── LangChain: model with structured output bound to Zod schema ──
-  const model = new ChatGoogleGenerativeAI({
-    model      : 'gemini-2.5-flash',
-    apiKey     : process.env.GEMINI_API_KEY,
-    temperature: 0.7,
-  }).withStructuredOutput(ScriptSchema, { name: 'script' });
+  const client = getOpenRouterClient();
 
   let script = null;
   let error = null;
 
   try {
     const prompt = buildPrompt(scraped, allImages, aspectRatio, feedback, previousScript);
+    const jsonSchema = zodToJsonSchema(ScriptSchema, "Script");
 
-    // LangChain handles the API call, JSON extraction, and Zod parsing
-    const result = await model.invoke([new HumanMessage(prompt)]);
+    const systemPrompt = `You must output ONLY valid JSON matching this schema:
+${JSON.stringify(jsonSchema, null, 2)}`;
+
+    const apiResponse = await client.chat.completions.create({
+      model: 'qwen/qwen3.8-27b:free',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7,
+      response_format: { type: 'json_object' },
+      reasoning: { enabled: true }
+    });
+
+    // Extract content
+    const content = apiResponse.choices[0].message.content;
+    
+    // Clean markdown code blocks if the model wrapped it
+    const jsonStr = (content || "{}").replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    
+    const parsed = JSON.parse(jsonStr);
+    const result = ScriptSchema.parse(parsed);
 
     // Backfill brand color into scene ctaBg if Gemini left it as the placeholder
     if (result.brandColor === '#10B981' && scraped.brandColor) {

@@ -1,7 +1,5 @@
 import 'dotenv/config';
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { HumanMessage } from '@langchain/core/messages';
-import { StringOutputParser } from '@langchain/core/output_parsers';
+import { getOpenRouterClient } from '../lib/openrouter.js';
 
 // ─── Node ─────────────────────────────────────────────────────────────────────
 
@@ -14,19 +12,11 @@ export async function pexelsNode(state) {
     return { stockImages: [] };
   }
 
-  // ── 1. Ask Gemini for the best search category ───────────────────────────
+  // ── 1. Ask Model for the best search category ───────────────────────────
   let category = 'business'; // safe fallback
 
-  if (process.env.GEMINI_API_KEY && scraped) {
-    // LangChain chain: model | string parser  (no manual fetch, no response drilling)
-    const model = new ChatGoogleGenerativeAI({
-      model      : 'gemini-2.5-flash-lite',
-      apiKey     : process.env.GEMINI_API_KEY,
-      temperature: 0.1,
-      maxOutputTokens: 20,
-    });
-
-    const chain = model.pipe(new StringOutputParser());
+  if (process.env.OPENROUTER_API_KEY && scraped) {
+    const client = getOpenRouterClient();
 
     const prompt = `
 Based on this scraped website data, output the single best Pexels search term
@@ -39,11 +29,19 @@ Text snippet: ${(scraped.pageText || '').slice(0, 500)}
 `.trim();
 
     try {
-      const raw = await chain.invoke([new HumanMessage(prompt)]);
+      const apiResponse = await client.chat.completions.create({
+        model: 'qwen/qwen3.8-27b:free',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        max_tokens: 20,
+        reasoning: { enabled: true }
+      });
+      
+      const raw = apiResponse.choices[0].message.content || '';
       const cleaned = raw.trim().replace(/[^a-zA-Z0-9\s]/g, '');
       if (cleaned) category = cleaned;
     } catch (err) {
-      console.error('[Pexels Node] Gemini category call failed:', err.message);
+      console.error('[Pexels Node] OpenRouter category call failed:', err.message);
     }
   }
 
