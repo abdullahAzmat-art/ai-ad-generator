@@ -30,7 +30,7 @@ Text snippet: ${(scraped.pageText || '').slice(0, 500)}
 
     try {
       const apiResponse = await client.chat.completions.create({
-        model: 'qwen/qwen3.8-27b:free',
+        model: 'openai/gpt-oss-120b',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1,
         max_tokens: 20,

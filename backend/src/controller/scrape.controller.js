@@ -1,4 +1,5 @@
 import { adGraph } from '../../ai/graph/index.js';
+import crypto from 'crypto';
 
 export async function scrapeController(request, response) {
   const { url, aspectRatio } = request.body ?? {};
@@ -8,11 +9,21 @@ export async function scrapeController(request, response) {
   }
 
   try {
-    const result = await adGraph.invoke({ url, aspectRatio });
+    const thread_id = crypto.randomUUID();
+    const result = await adGraph.invoke(
+      { url, aspectRatio },
+      { configurable: { thread_id } }
+    );
+    
+    // The graph will now interrupt at human_review, so we return the partial state
+    // as well as the thread_id so the frontend can resume it later.
     return response.json({
+      thread_id,
       scraped: result.scraped,
       stockImages: result.stockImages,
       script: result.script,       // { scenes: [3], brandColor, format }
+      videoUrl: result.videoUrl,
+      // You can also check if result contains an interrupt payload here depending on LangGraph version
     });
   } catch (error) {
     console.error('Scrape workflow failed:', error);

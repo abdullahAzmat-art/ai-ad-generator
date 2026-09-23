@@ -138,14 +138,17 @@
 //                     ┌───────────────┐
 //                     │      END      │
 //                     └───────────────┘
-import { END, START, StateGraph } from '@langchain/langgraph';
+import { END, START, StateGraph, MemorySaver } from '@langchain/langgraph';
 import { AdState } from '../state/ad.state.js';
 import { scrapeNode } from '../nodes/scrape.node.js';
 import { pexelsNode } from '../nodes/pexels.node.js';
 import { draftNode } from '../nodes/draft.node.js';
 import { reviewNode } from '../nodes/review.node.js';
 import { renderNode } from '../nodes/render.node.js';
-import { routeImages, routeReview } from './routes.js';
+import { humanReviewNode } from '../nodes/humanReview.node.js';
+import { applyEditsNode } from '../nodes/applyEdits.node.js';
+import { finalizeNode } from '../nodes/finalize.node.js';
+import { routeImages, routeReview, routeHumanReview } from './routes.js';
 
 export const adGraph = new StateGraph(AdState)
   .addNode('scrape', scrapeNode)
@@ -153,6 +156,9 @@ export const adGraph = new StateGraph(AdState)
   .addNode('draft', draftNode)
   .addNode('review', reviewNode)
   .addNode('render', renderNode)
+  .addNode('human_review', humanReviewNode)
+  .addNode('apply_edits', applyEditsNode)
+  .addNode('finalize', finalizeNode)
   
   .addEdge(START, 'scrape')
   
@@ -166,12 +172,18 @@ export const adGraph = new StateGraph(AdState)
   
   .addConditionalEdges('review', routeReview, {
     draft: 'draft',
-    render: 'render',
+    render: 'render', // We proceed to render
   })
   
-  .addEdge('render', END) // Temporarily pointing to END until Human Review is built
+  // After render, go to human review
+  .addEdge('render', 'human_review')
   
-  // .addNode('human_review', humanReviewNode)
-  // .addNode('apply_edits', applyEditsNode)
-  // .addNode('finalize', finalizeNode)
-  .compile();
+  .addConditionalEdges('human_review', routeHumanReview, {
+    apply_edits: 'apply_edits',
+    finalize: 'finalize',
+  })
+  
+  .addEdge('apply_edits', 'render')
+  .addEdge('finalize', END)
+  
+  .compile({ checkpointer: new MemorySaver() });

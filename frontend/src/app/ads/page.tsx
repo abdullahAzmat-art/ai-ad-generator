@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -203,12 +203,112 @@ function AdsContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchAds = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch("http://localhost:4000/api/scrape", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: rawUrl, aspectRatio: "9:16" }),
+        });
+        const data = await res.json();
+        
+        if (!isMounted) return;
+        
+        if (data.error) {
+          console.error(data.error);
+          setLoading(false);
+          return;
+        }
+
+        setThreadId(data.thread_id);
+        setVideoUrl(data.videoUrl);
+
+        if (data.script && data.script.scenes) {
+          const mappedAds: AdCreative[] = data.script.scenes.map((scene: any, i: number) => ({
+            id: scene.id || `ad-${i}`,
+            format: data.script.format || "story",
+            platform: "Generated Ad",
+            resolution: "1080×1920",
+            badge: scene.angle || "Variation",
+            headline: scene.headline,
+            body: scene.body,
+            cta: scene.cta,
+            bgFrom: scene.bgFrom,
+            bgTo: scene.bgTo,
+            textColor: scene.textColor,
+            ctaBg: scene.ctaBg,
+            ctaText: scene.ctaText,
+          }));
+          setAds(mappedAds);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchAds();
+    return () => { isMounted = false; };
+  }, [rawUrl]);
 
   const currentAd = ads[activeIndex];
   const updateAd = (patch: Partial<AdCreative>) => setAds((prev) => prev.map((a, i) => (i === activeIndex ? { ...a, ...patch } : a)));
-  const handleDownload = () => {
+  
+  const handleApplyEdits = async () => {
+    if (!threadId) return;
     setDownloading(true);
-    setTimeout(() => { setDownloading(false); setDownloaded(true); setTimeout(() => setDownloaded(false), 2500); }, 1400);
+    try {
+      // Re-map the Ads array back into the backend scene format
+      const scenes = ads.map(a => ({
+        id: a.id,
+        angle: a.badge,
+        headline: a.headline,
+        body: a.body,
+        cta: a.cta,
+        imageIndex: 0, // Simplified for now
+        durationSec: 4,
+        voiceover: "",
+        bgFrom: a.bgFrom,
+        bgTo: a.bgTo,
+        textColor: a.textColor,
+        ctaBg: a.ctaBg,
+        ctaText: a.ctaText,
+      }));
+
+      const res = await fetch("http://localhost:4000/api/resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          thread_id: threadId,
+          decision: { action: "edit", edits: { scenes } }
+        }),
+      });
+      const data = await res.json();
+      if (data.videoUrl) setVideoUrl(data.videoUrl);
+      setDownloaded(true);
+      setTimeout(() => setDownloaded(false), 2500);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!threadId) {
+      setDownloading(true);
+      setTimeout(() => { setDownloading(false); setDownloaded(true); setTimeout(() => setDownloaded(false), 2500); }, 1400);
+      return;
+    }
+    handleApplyEdits();
   };
 
   const formatIcon = currentAd.format === "story" ? <Smartphone className="w-3.5 h-3.5" /> : currentAd.format === "square" ? <LayoutTemplate className="w-3.5 h-3.5" /> : <MonitorPlay className="w-3.5 h-3.5" />;
@@ -283,8 +383,14 @@ function AdsContent() {
       </div>
       {/* Download — sticky footer */}
       <div className="shrink-0 p-4 border-t border-slate-200 bg-white">
-        <button onClick={handleDownload} disabled={downloading} type="button" className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-bold text-sm text-white bg-[#0a1945] hover:bg-[#0f2873] transition-all duration-300 shadow-[0_6px_20px_rgba(10,25,70,0.22)] hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer">
-          {downloading ? <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> : downloaded ? <><Check className="w-4 h-4 text-emerald-300" /><span className="text-emerald-200">Downloaded!</span></> : <><Download className="w-4 h-4" /><span>Download HD — {currentAd.resolution}</span></>}
+        <button onClick={handleDownload} disabled={downloading || loading} type="button" className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-bold text-sm text-white bg-[#0a1945] hover:bg-[#0f2873] transition-all duration-300 shadow-[0_6px_20px_rgba(10,25,70,0.22)] hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer">
+          {downloading ? (
+            <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+          ) : downloaded ? (
+            <><Check className="w-4 h-4 text-emerald-300" /><span className="text-emerald-200">Success!</span></>
+          ) : (
+            <><Download className="w-4 h-4" /><span>{videoUrl ? "Apply Edits & Re-render" : "Render Video"}</span></>
+          )}
         </button>
       </div>
     </div>
@@ -330,17 +436,32 @@ function AdsContent() {
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-[#dbeafe] rounded-full blur-[180px] opacity-40" />
           </div>
           <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-6 overflow-auto">
-            <div className="mb-5 flex items-center gap-3">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Preview Canvas</span>
-              <div className="flex gap-1.5">
-                {ads.map((_, i) => (
-                  <button key={i} onClick={() => setActiveIndex(i)} type="button" className={`w-2 h-2 rounded-full transition-all duration-200 cursor-pointer ${i === activeIndex ? "bg-[#0a1945] scale-125" : "bg-slate-300 hover:bg-slate-400"}`} />
-                ))}
+            
+            {loading ? (
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-10 h-10 rounded-full border-[3px] border-blue-200 border-t-[#0a1945] animate-spin" />
+                <p className="text-[#0a1945] text-sm font-semibold tracking-widest uppercase">Generating your ads…</p>
               </div>
-            </div>
-            <div className="w-full max-w-[640px] max-h-[calc(100vh-160px)] flex items-center justify-center">
-              <AdCanvas ad={currentAd} domain={domain} />
-            </div>
+            ) : videoUrl ? (
+              <div className="w-full max-w-[400px] flex flex-col items-center gap-4">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Final Rendered Video</span>
+                <video src={videoUrl} controls autoPlay loop className="w-full rounded-2xl shadow-xl border-4 border-slate-700 bg-black" />
+              </div>
+            ) : (
+              <>
+                <div className="mb-5 flex items-center gap-3">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Preview Canvas</span>
+                  <div className="flex gap-1.5">
+                    {ads.map((_, i) => (
+                      <button key={i} onClick={() => setActiveIndex(i)} type="button" className={`w-2 h-2 rounded-full transition-all duration-200 cursor-pointer ${i === activeIndex ? "bg-[#0a1945] scale-125" : "bg-slate-300 hover:bg-slate-400"}`} />
+                    ))}
+                  </div>
+                </div>
+                <div className="w-full max-w-[640px] max-h-[calc(100vh-160px)] flex items-center justify-center">
+                  <AdCanvas ad={currentAd} domain={domain} />
+                </div>
+              </>
+            )}
           </div>
           <div className="relative z-10 shrink-0 flex items-center justify-center gap-3 pb-5">
             <button onClick={() => setActiveIndex((i) => Math.max(0, i - 1))} disabled={activeIndex === 0} type="button" className="px-4 py-1.5 rounded-full text-xs font-bold border border-slate-200 bg-white text-[#0a1945] hover:border-blue-300 hover:bg-blue-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer shadow-sm">← Prev</button>
