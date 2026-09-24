@@ -3,57 +3,53 @@ import { z } from 'zod';
 import { getOpenRouterClient } from '../lib/openrouter.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
+// ─── Schema ───────────────────────────────────────────────────────────────────
 
-// ─── Zod Schema ────────────────────────────────────────────────────────────────
-// Flat schema requested from the AI
-const FlatScriptSchema = z.object({
-  scene1_headline: z.string().describe("Short hook headline (max 8 words)"),
-  scene1_vo: z.string().describe("Voiceover script for scene 1"),
-  scene2_headline: z.string().describe("Main feature/benefit headline (max 6 words)"),
-  scene2_subtext: z.string().describe("Supporting proof/benefit sentence (max 10 words)"),
-  scene2_vo: z.string().describe("Voiceover script for scene 2"),
-  scene3_cta: z.string().describe("Clear call to action string (e.g. SHOP NOW - Win a Golden Card)"),
-  scene3_vo: z.string().describe("Voiceover script for scene 3"),
+// Layout semantics — your renderer controls actual coordinates
+const LAYOUTS = z.enum([
+  'full-bleed',       // asset covers the entire frame
+  'product-center',   // product centered, text around it
+  'product-right',    // product on the right, text on the left
+  'product-left',     // product on the left, text on the right
+  'top-text',         // headline on top half, asset on bottom
+  'bottom-text',      // asset on top, text below
+  'split',            // left / right equal halves
+  'overlay',          // text overlaid on asset with opacity layer
+]);
+
+// Animation semantics — your renderer maps these to actual transitions
+const ANIMATIONS = z.enum([
+  'slow-zoom',        // Ken Burns style zoom in
+  'fade-in',          // simple opacity fade
+  'slide-up',         // text / element slides up into position
+  'product-reveal',   // dramatic product entrance
+  'slide-right',      // wipe from left
+  'pulse',            // subtle scale pulse
+  'none',             // static
+]);
+
+const SceneSchema = z.object({
+  role: z.string().describe(
+    "The narrative role of this scene from the blueprint (e.g. hook, product-hero, benefits, offer, cta, problem, solution, trust)"
+  ),
+  layout: LAYOUTS.describe(
+    "Semantic layout name. Your renderer maps this to pixel coordinates."
+  ),
+  assetRole: z.enum([
+    'productHero', 'productSecondary', 'lifestyle',
+    'person', 'office', 'food', 'background', 'logo', 'any'
+  ]).describe("Which classified asset category should be used for this scene's visual"),
+  headline: z.string().describe("The main headline text for this scene (max 8 words)"),
+  subtext: z.string().describe("Optional supporting text (max 12 words). Empty string if not needed."),
+  cta: z.string().describe("Call-to-action button text. Empty string if this scene has no CTA."),
+  voiceover: z.string().describe("Voiceover script that fits the scene duration (max 2.5 words/sec)"),
+  durationSec: z.number().describe("Scene duration in seconds (between 2 and 6)"),
+  animation: ANIMATIONS.describe("Semantic animation name for this scene"),
 });
 
-// ─── Normalise raw model output ───────────────────────────────────────────────
-// Transforms the flat JSON from the AI into the expected scenes array
-function normalizeScript(raw) {
-  return {
-    scenes: [
-      {
-        id: 'scene-1',
-        angle: 'Hook',
-        headline: raw.scene1_headline || 'Welcome',
-        body: '',
-        cta: '',
-        voiceover: raw.scene1_vo || '',
-        imageIndex: 0,
-        durationSec: 4
-      },
-      {
-        id: 'scene-2',
-        angle: 'Benefit',
-        headline: raw.scene2_headline || 'Great Features',
-        body: raw.scene2_subtext || '',
-        cta: '',
-        voiceover: raw.scene2_vo || '',
-        imageIndex: 1,
-        durationSec: 4
-      },
-      {
-        id: 'scene-3',
-        angle: 'CTA',
-        headline: raw.scene3_cta || 'Shop Now',
-        body: '',
-        cta: 'SHOP NOW', // Fallback short button text
-        voiceover: raw.scene3_vo || '',
-        imageIndex: 2,
-        durationSec: 4
-      }
-    ]
-  };
-}
+const ScriptSchema = z.object({
+  scenes: z.array(SceneSchema).describe("Ordered list of scenes following the blueprint structure"),
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,31 +59,58 @@ function toFormat(aspectRatio) {
   return 'story';
 }
 
-function buildPrompt(
-  scraped,
-  allImages,
-  aspectRatio,
-  feedback,
-  previousScript
-) {
+function buildPrompt(state, feedback, previousScript) {
+  const {
+    scraped,
+    adType = 'business',
+    assets = {},
+    blueprint = [],
+    aspectRatio = '9:16',
+  } = state;
+
   const {
     title = '',
     description = '',
     pageText = '',
     brandColor = '#10B981',
-  } = scraped;
+  } = scraped || {};
 
-  const imageList = allImages.length
-    ? allImages.map((u, i) => `${i}. ${u}`).join('\n')
-    : '(no images available — use imageIndex: 0)';
+  const brand = scraped?.brandInformation || { name: title };
+  const product = scraped?.productInformation || {};
+  const colors = (scraped?.colors || [brandColor]).join(', ');
+  const fonts = (scraped?.fonts || []).join(', ') || 'not specified';
+  const ctaHints = (scraped?.ctaHints || []).join(', ') || 'not specified';
+
+  // Summarise which asset categories are available
+  const assetSummary = Object.entries({
+    logo: assets?.logo ? 1 : 0,
+    productHero: assets?.productHero ? 1 : 0,
+    productSecondary: (assets?.productSecondary || []).length,
+    lifestyle: (assets?.lifestyle || []).length,
+    person: (assets?.person || []).length,
+    office: (assets?.office || []).length,
+    food: (assets?.food || []).length,
+    background: (assets?.background || []).length,
+  })
+    .filter(([, count]) => count > 0)
+    .map(([type, count]) => `  • ${type}: ${count} image(s)`)
+    .join('\n') || '  • none — rely on "any" or "background"';
+
+  // Describe the blueprint plan
+  const blueprintStr = blueprint.length
+    ? blueprint
+        .map((step, i) =>
+          `  Scene ${i + 1}: [${step.role}] — ${step.purpose} (${step.durationSec}s, needs: ${step.assetTypeNeeded})`
+        )
+        .join('\n')
+    : '  Not specified — use standard structure for this adType.';
 
   let feedbackSection = '';
-
   if (feedback && feedback.length > 0) {
     feedbackSection = `
 === FEEDBACK FROM PREVIOUS ATTEMPT ===
-Your previous attempt had these problems, fix ALL of them:
-${feedback.join('\n')}
+Fix ALL of the following issues:
+${feedback.map(f => `  - ${f}`).join('\n')}
 
 Previous script:
 ${JSON.stringify(previousScript, null, 2)}
@@ -95,43 +118,46 @@ ${JSON.stringify(previousScript, null, 2)}
   }
 
   return `
-You are a world-class performance-marketing copywriter.
+You are a Creative copy + scene planner for high-converting video advertisements.
 
-Create EXACTLY 3 ad scenes for this brand.
+Your job is to write each scene's copy and decide its visual layout and animation.
+DO NOT choose pixel coordinates — only semantic names.
+Your renderer code will translate layout names into actual positions.
 
-=== BRAND DATA ===
-Title       : ${title}
-Description : ${description}
+=== BRAND ===
+Name        : ${brand.name || title}
+Tagline     : ${brand.missionOrTagline || description}
 Page text   : ${pageText.slice(0, 2000)}
-Brand color : ${brandColor}
-Aspect ratio: ${aspectRatio}
 
-=== AVAILABLE IMAGES ===
-${imageList}
+=== PRODUCT / SERVICE ===
+Offering    : ${product.mainProductOrService || 'not specified'}
+Key features: ${(product.keyFeatures || []).join(', ') || 'not specified'}
+Audience    : ${product.targetAudience || 'general'}
+Pricing     : ${product.pricingOrOffers || 'not specified'}
+
+=== STYLE ===
+Ad type     : ${adType.toUpperCase()}
+Aspect ratio: ${aspectRatio}
+Brand colors: ${colors}
+Fonts       : ${fonts}
+CTA hints   : ${ctaHints}
+
+=== AVAILABLE ASSETS ===
+${assetSummary}
+
+=== AD BLUEPRINT ===
+${blueprintStr}
 
 ${feedbackSection}
 
-=== OUTPUT FORMAT ===
-Return a single JSON object with exactly these 7 keys. No extra keys, no markdown, no explanation:
-
-{
-  "scene1_headline": "<short hook headline — max 8 words>",
-  "scene1_vo": "<voiceover for scene 1 — fits 4 seconds @ 2.5 words/sec max>",
-  "scene2_headline": "<main feature/benefit headline — max 6 words>",
-  "scene2_subtext": "<supporting proof or benefit — max 10 words>",
-  "scene2_vo": "<voiceover for scene 2 — fits 4 seconds @ 2.5 words/sec max>",
-  "scene3_cta": "<clear call-to-action string, e.g. SHOP NOW - Free Shipping Today>",
-  "scene3_vo": "<voiceover for scene 3 — fits 4 seconds @ 2.5 words/sec max>"
-}
-
 === RULES ===
-1. scene1_headline is the hook — grab attention with the brand's strongest claim or curiosity trigger.
-2. scene2_headline is the benefit — the clearest reason to buy (max 6 words).
-3. scene2_subtext backs it up with a concrete proof point. Use only facts from the brand data above.
-4. scene3_cta is the button text. Make it action-oriented and urgent.
-5. All voiceovers must be natural speech that fits exactly 4 seconds (max 10 words each).
-6. Write only for THIS brand. Never use generic copy ("Buy Now", "Great Product", etc.).
-7. Never invent prices, discounts, statistics, guarantees, or claims not stated in the brand data.
+1. Produce EXACTLY ${blueprint.length || 3} scenes, strictly following the blueprint order and scene roles.
+2. Each scene's "assetRole" must match what the blueprint says it needs, if available. Fall back to "any" only if that category is unavailable.
+3. Headlines: max 8 words. Subtext: max 12 words. Leave empty string "" if not needed.
+4. Only the final CTA scene should have a non-empty "cta" button text.
+5. Voiceover must fit the scene's durationSec at 2.5 words/sec max.
+6. Never invent prices, stats, or guarantees not stated above.
+7. Write only for THIS brand — no generic filler copy.
 `.trim();
 }
 
@@ -142,99 +168,45 @@ export async function draftNode(state) {
     scraped,
     stockImages = [],
     aspectRatio = '9:16',
+    blueprint = [],
     feedback = [],
     script: previousScript = null,
     iterations = 0,
   } = state;
 
   if (!process.env.OPENROUTER_API_KEY) {
-    console.warn(
-      '[Draft Node] OPENROUTER_API_KEY missing — returning null script.'
-    );
-
-    return {
-      script: null,
-      error: 'OPENROUTER_API_KEY missing',
-    };
+    console.warn('[Scene Draft] OPENROUTER_API_KEY missing — returning null script.');
+    return { script: null, error: 'OPENROUTER_API_KEY missing' };
   }
 
   if (!scraped) {
-    console.warn(
-      '[Draft Node] No scraped data — returning null script.'
-    );
-
-    return {
-      script: null,
-      error: 'No scraped data',
-    };
+    console.warn('[Scene Draft] No scraped data — returning null script.');
+    return { script: null, error: 'No scraped data' };
   }
 
-  // ── Combine and deduplicate images ────────────────────────────────────────
-
-  const allImages = [
-    ...new Set([
-      ...(scraped.images ?? []),
-      ...stockImages,
-    ]),
-  ];
-
-  console.log(
-    `[Draft Node] ${allImages.length} images, aspect: ${aspectRatio}`
-  );
+  console.log(`[Scene Draft] ${blueprint.length} blueprint scenes, aspect: ${aspectRatio}`);
 
   const client = getOpenRouterClient();
-
   let script = null;
   let error = null;
 
   try {
-    // ── Build prompt ────────────────────────────────────────────────────────
+    const prompt = buildPrompt(state, feedback, previousScript);
+    const jsonSchema = zodToJsonSchema(ScriptSchema, 'Script');
 
-    const prompt = buildPrompt(
-      scraped,
-      allImages,
-      aspectRatio,
-      feedback,
-      previousScript
-    );
-
-    // ── Convert Zod → JSON Schema ───────────────────────────────────────────
-
-    const jsonSchema = zodToJsonSchema(
-      FlatScriptSchema,
-      'Script'
-    );
-
-    // ── System prompt ──────────────────────────────────────────────────────
     const systemPrompt = `
-Create the advertisement script according to the required structured output schema.
-
-Important:
-- Return exactly a single JSON object.
-- Every required field must be present.
-- Return only the structured output.
+You are a Scene Draft node in an AI advertisement pipeline.
+Produce a structured scene plan following the provided blueprint exactly.
+Return only the JSON object — no markdown, no explanation.
 `.trim();
-
-    // ── OpenRouter request ─────────────────────────────────────────────────
 
     const apiResponse = await client.chat.completions.create({
       model: 'openai/gpt-oss-120b',
-
       messages: [
-        {
-          role: 'system',
-          content: systemPrompt,
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt },
       ],
-
       temperature: 0.3,
-
-      // IMPORTANT:
-      // We are using JSON Schema instead of simple JSON mode.
       response_format: {
         type: 'json_schema',
         json_schema: {
@@ -243,103 +215,37 @@ Important:
           schema: jsonSchema,
         },
       },
-
-      // Reasoning is not necessary for this relatively simple
-      // structured generation task.
-      reasoning: {
-        enabled: true,
-      },
+      reasoning: { enabled: true },
     });
 
-    // ── Get model response ─────────────────────────────────────────────────
-
     const content = apiResponse.choices?.[0]?.message?.content;
+    if (!content) throw new Error('Model returned empty content.');
 
-    if (!content) {
-      throw new Error('Model returned empty content.');
-    }
-
-    console.log('[Draft Node] Raw structured response received.');
-
-    // ── Parse JSON ──────────────────────────────────────────────────────────
+    console.log('[Scene Draft] Structured response received.');
 
     const rawJson = JSON.parse(content);
-
-    // ── Validate with Zod ───────────────────────────────────────────────────
-
-    const validatedFlat = FlatScriptSchema.parse(rawJson);
-
-    // ── Normalise into expected scenes array ────────────────────────────────
-
-    const result = normalizeScript(validatedFlat);
-    console.log('[Draft Node] Normalised scenes:', result.scenes.length);
-
-    // ── Clamp image indexes to valid range ──────────────────────────────────
-
-    const maxImageIndex = Math.max(allImages.length - 1, 0);
-
-    for (const scene of result.scenes) {
-      if (scene.imageIndex > maxImageIndex) {
-        scene.imageIndex = maxImageIndex;
-      }
-    }
-
-    // ── Final script ───────────────────────────────────────────────────────
+    const validated = ScriptSchema.parse(rawJson);
 
     script = {
-      ...result,
+      scenes: validated.scenes,
       format: toFormat(aspectRatio),
+      adType: state.adType || 'business',
     };
 
-    console.log(
-      `[Draft Node] ✓ ${script.scenes.length} scenes drafted successfully.`
-    );
+    console.log(`[Scene Draft] ✓ ${script.scenes.length} scenes drafted.`);
 
   } catch (err) {
-
-    // ── Zod error ──────────────────────────────────────────────────────────
-
     if (err instanceof z.ZodError) {
       const issues = err.flatten().fieldErrors;
-
-      error =
-        'Zod validation failed: ' +
-        JSON.stringify(issues);
-
-      console.error(
-        '[Draft Node] Zod validation failed:',
-        JSON.stringify(issues, null, 2)
-      );
-
+      error = 'Zod validation failed: ' + JSON.stringify(issues);
+      console.error('[Scene Draft] Zod error:', JSON.stringify(issues, null, 2));
     } else {
-
-      // ── API / JSON / other error ─────────────────────────────────────────
-
-      error = err?.message || 'Unknown Draft Node error';
-
-      console.error(
-        '[Draft Node] Failed:',
-        error
-      );
+      error = err?.message || 'Unknown Scene Draft error';
+      console.error('[Scene Draft] Failed:', error);
     }
-
     script = null;
   }
 
-  // ── Return failure ───────────────────────────────────────────────────────
-
-  if (error) {
-    return {
-      script: null,
-      error,
-    };
-  }
-
-  // ── Return successful script ─────────────────────────────────────────────
-
-  return {
-    script,
-    iterations,
-  };
+  if (error) return { script: null, error };
+  return { script, iterations };
 }
-

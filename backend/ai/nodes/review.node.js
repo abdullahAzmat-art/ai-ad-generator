@@ -1,72 +1,126 @@
+const VALID_LAYOUTS = new Set([
+  'full-bleed', 'product-center', 'product-right',
+  'product-left', 'top-text', 'bottom-text', 'split', 'overlay',
+]);
+
+const VALID_ANIMATIONS = new Set([
+  'slow-zoom', 'fade-in', 'slide-up', 'product-reveal',
+  'slide-right', 'pulse', 'none',
+]);
+
+const VALID_ASSET_ROLES = new Set([
+  'productHero', 'productSecondary', 'lifestyle',
+  'person', 'office', 'food', 'background', 'logo', 'any',
+]);
+
 export async function reviewNode(state) {
-  const { script, scraped, stockImages = [], iterations = 0 } = state;
+  const { script, blueprint = [], iterations = 0 } = state;
   const feedback = [];
   let approved = false;
 
-  // 1. If script is completely missing (e.g., Zod or Gemini failed upstream)
-  if (!script) {
+  // 1. Missing script
+  if (!script || !Array.isArray(script.scenes)) {
     return {
-      feedback: ['Script generation failed. Please try again and strictly follow the JSON schema.'],
+      feedback: ['Script generation failed. Please regenerate strictly following the JSON schema.'],
       approved: false,
       iterations: iterations + 1,
     };
   }
 
-  // Gather images to check bounds
-  const scraperImages = scraped?.images ?? [];
-  const allImages = [...new Set([...scraperImages, ...stockImages])];
-  const maxImageIndex = Math.max(0, allImages.length - 1);
+  const expectedCount = blueprint.length || 3;
 
-  // 2. Scene count / roles
-  if (!script.scenes || script.scenes.length !== 3) {
-    feedback.push(`Expected exactly 3 scenes, got ${script.scenes?.length ?? 0}.`);
+  // 2. Scene count must match the blueprint
+  if (script.scenes.length !== expectedCount) {
+    feedback.push(
+      `Expected exactly ${expectedCount} scenes (matching the blueprint), got ${script.scenes.length}.`
+    );
   }
 
-  if (script.scenes && script.scenes.length === 3) {
-    // 3. Total duration
-    const totalDuration = script.scenes.reduce((sum, s) => sum + (s.durationSec || 0), 0);
-    if (totalDuration < 12 || totalDuration > 18) {
-      feedback.push(`Total duration must be 12–18s. Currently it is ${totalDuration}s.`);
+  // 3. Per-scene validation
+  script.scenes.forEach((scene, i) => {
+    const n = i + 1;
+    const blueprintStep = blueprint[i];
+
+    // 3a. Role must match blueprint
+    if (blueprintStep && scene.role !== blueprintStep.role) {
+      feedback.push(
+        `Scene ${n}: role is "${scene.role}" but blueprint expects "${blueprintStep.role}".`
+      );
     }
 
-    // Scene-level checks
-    script.scenes.forEach((scene, i) => {
-      const n = i + 1;
+    // 3b. Layout must be a known semantic name
+    if (!VALID_LAYOUTS.has(scene.layout)) {
+      feedback.push(
+        `Scene ${n}: unknown layout "${scene.layout}". Must be one of: ${[...VALID_LAYOUTS].join(', ')}.`
+      );
+    }
 
-      // 4. Voiceover length (words <= durationSec * 2.5)
-      const wordCount = (scene.voiceover || '').trim().split(/\s+/).length;
-      const maxWords = Math.floor((scene.durationSec || 4) * 2.5);
-      if (wordCount > maxWords) {
-        feedback.push(`Scene ${n} voiceover is too long (${wordCount} words). Max for ${scene.durationSec}s is ${maxWords} words.`);
-      }
+    // 3c. Animation must be a known semantic name
+    if (!VALID_ANIMATIONS.has(scene.animation)) {
+      feedback.push(
+        `Scene ${n}: unknown animation "${scene.animation}". Must be one of: ${[...VALID_ANIMATIONS].join(', ')}.`
+      );
+    }
 
-      // 5. Image index bounds
-      const idx = scene.imageIndex;
-      if (typeof idx !== 'number' || idx < 0 || idx > maxImageIndex) {
-        if (allImages.length === 0) {
-          if (idx !== 0) feedback.push(`Scene ${n} imageIndex must be 0 (no images available).`);
-        } else {
-          feedback.push(`Scene ${n} imageIndex (${idx}) is out of bounds. Must be 0 to ${maxImageIndex}.`);
-        }
-      }
+    // 3d. Asset role must be valid
+    if (!VALID_ASSET_ROLES.has(scene.assetRole)) {
+      feedback.push(
+        `Scene ${n}: unknown assetRole "${scene.assetRole}". Must be one of: ${[...VALID_ASSET_ROLES].join(', ')}.`
+      );
+    }
 
-      // 6. Headline length (< 45 chars)
-      const hl = scene.headline || '';
-      if (hl.length >= 45) {
-        feedback.push(`Scene ${n} headline is too long (${hl.length} chars). Must be under 45 chars.`);
+    // 3e. Headline required, max 8 words
+    if (!scene.headline || scene.headline.trim() === '') {
+      feedback.push(`Scene ${n}: headline is required.`);
+    } else {
+      const wordCount = scene.headline.trim().split(/\s+/).length;
+      if (wordCount > 8) {
+        feedback.push(`Scene ${n}: headline too long (${wordCount} words). Max 8 words.`);
       }
-    });
+    }
+
+    // 3f. Subtext max 12 words (if provided)
+    if (scene.subtext && scene.subtext.trim() !== '') {
+      const wordCount = scene.subtext.trim().split(/\s+/).length;
+      if (wordCount > 12) {
+        feedback.push(`Scene ${n}: subtext too long (${wordCount} words). Max 12 words.`);
+      }
+    }
+
+    // 3g. Voiceover word-count vs duration
+    const voiceWordCount = (scene.voiceover || '').trim().split(/\s+/).filter(Boolean).length;
+    const maxVoiceWords = Math.floor((scene.durationSec || 4) * 2.5);
+    if (voiceWordCount > maxVoiceWords) {
+      feedback.push(
+        `Scene ${n}: voiceover too long (${voiceWordCount} words). Max for ${scene.durationSec}s is ${maxVoiceWords} words.`
+      );
+    }
+
+    // 3h. Duration bounds
+    if (scene.durationSec < 2 || scene.durationSec > 6) {
+      feedback.push(`Scene ${n}: durationSec must be between 2 and 6. Got ${scene.durationSec}.`);
+    }
+
+    // 3i. CTA should only appear on the final scene
+    if (i < script.scenes.length - 1 && scene.cta && scene.cta.trim() !== '') {
+      feedback.push(`Scene ${n}: only the last scene should have a CTA button.`);
+    }
+    if (i === script.scenes.length - 1 && (!scene.cta || scene.cta.trim() === '')) {
+      feedback.push(`Scene ${n} (final): missing CTA button text.`);
+    }
+  });
+
+  // 4. Total duration check
+  const totalDuration = script.scenes.reduce((sum, s) => sum + (s.durationSec || 0), 0);
+  if (totalDuration < 8 || totalDuration > 20) {
+    feedback.push(`Total duration must be 8–20s. Currently ${totalDuration}s.`);
   }
 
-  if (feedback.length === 0) {
-    approved = true;
-  }
+  approved = feedback.length === 0;
 
-  console.log(`[Review Node] Approved: ${approved}, Feedback: ${feedback.length} issues, Iteration: ${iterations + 1}`);
+  console.log(
+    `[Review Node] Approved: ${approved}, Issues: ${feedback.length}, Iteration: ${iterations + 1}`
+  );
 
-  return {
-    feedback,
-    approved,
-    iterations: iterations + 1,
-  };
+  return { feedback, approved, iterations: iterations + 1 };
 }

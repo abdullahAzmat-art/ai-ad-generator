@@ -54,11 +54,12 @@
 //                    │
 //                    ▼
 //     ┌─────────────────────────────────┐
-//     │ [x] DRAFT                       │
+//     │ [x] SCENE DRAFT                 │
 //     │                                 │
-//     │  Gemini                         │
+//     │  Creative copy + scene planner  │
 //     │                                 │
-//     │  Generate 3-scene ad script     │
+//     │  blueprint → scenes[]           │
+//     │  layout / animation / assetRole │
 //     └───────────────┬─────────────────┘
 //                     │
 //                     ▼
