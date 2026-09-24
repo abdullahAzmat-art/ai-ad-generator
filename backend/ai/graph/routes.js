@@ -1,7 +1,7 @@
 import { MIN_IMAGES } from "../lib/config.js";
 
 export function routeImages(state) {
-  return state.scraped.images.length >= MIN_IMAGES ? "draft" : "pexels";
+  return state.missingAssets && state.missingAssets.length > 0 ? "pexels" : "draft";
 }
 
 export function routeReview(state) {

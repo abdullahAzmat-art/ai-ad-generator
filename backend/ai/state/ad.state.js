@@ -20,6 +20,16 @@ export const AdState = Annotation.Root({
   // scrape node
   scraped: overwrite(null),         // Scraped
 
+  // classify assets node
+  assets: overwrite(null),          // categorized images
+  
+  // detect ad type node
+  adType: overwrite(null),          // e.g. "product", "service", "business"
+
+  // blueprint node
+  blueprint: overwrite(null),       // creative plan structure
+  missingAssets: overwrite([]),     // assets needed from Pexels
+
   // pexels node
   stockImages: overwrite([]),       // which images came from Pexels (UI can show a "stock" badge)
 

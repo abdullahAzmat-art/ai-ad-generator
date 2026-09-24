@@ -16,9 +16,27 @@
 //                     │
 //                     ▼
 //     ┌─────────────────────────────────┐
+//     │ [x] CLASSIFY ASSETS             │
+//     │  Categorize images via vision   │
+//     └───────────────┬─────────────────┘
+//                     │
+//                     ▼
+//     ┌─────────────────────────────────┐
+//     │ [x] DETECT AD TYPE              │
+//     │  Product / Service / Business   │
+//     └───────────────┬─────────────────┘
+//                     │
+//                     ▼
+//     ┌─────────────────────────────────┐
+//     │ [x] BLUEPRINT                   │
+//     │  Plan structure & find gaps     │
+//     └───────────────┬─────────────────┘
+//                     │
+//                     ▼
+//     ┌─────────────────────────────────┐
 //     │ [x] ROUTE IMAGES                │
 //     │                                 │
-//     │  Are there 3+ good images?      │
+//     │  Are there missing assets?      │
 //     └───────────────┬─────────────────┘
 //                     │
 //           ┌─────────┴─────────┐
@@ -29,7 +47,7 @@
 //           │    ┌─────────────────────────┐
 //           │    │ [x] PEXELS              │
 //           │    │                         │
-//           │    │  Add stock photos       │
+//           │    │  Fill missing gaps      │
 //           │    └────────────┬────────────┘
 //           │                 │
 //           └────────┬────────┘
@@ -141,6 +159,9 @@
 import { END, START, StateGraph, MemorySaver } from '@langchain/langgraph';
 import { AdState } from '../state/ad.state.js';
 import { scrapeNode } from '../nodes/scrape.node.js';
+import { classifyAssetsNode } from '../nodes/classifyAssets.node.js';
+import { detectAdTypeNode } from '../nodes/detectAdType.node.js';
+import { blueprintNode } from '../nodes/blueprint.node.js';
 import { pexelsNode } from '../nodes/pexels.node.js';
 import { draftNode } from '../nodes/draft.node.js';
 import { reviewNode } from '../nodes/review.node.js';
@@ -152,6 +173,9 @@ import { routeImages, routeReview, routeHumanReview } from './routes.js';
 
 export const adGraph = new StateGraph(AdState)
   .addNode('scrape', scrapeNode)
+  .addNode('classify_assets', classifyAssetsNode)
+  .addNode('detect_ad_type', detectAdTypeNode)
+  .addNode('blueprint', blueprintNode)
   .addNode('pexels', pexelsNode)
   .addNode('draft', draftNode)
   .addNode('review', reviewNode)
@@ -161,8 +185,11 @@ export const adGraph = new StateGraph(AdState)
   .addNode('finalize', finalizeNode)
   
   .addEdge(START, 'scrape')
+  .addEdge('scrape', 'classify_assets')
+  .addEdge('classify_assets', 'detect_ad_type')
+  .addEdge('detect_ad_type', 'blueprint')
   
-  .addConditionalEdges('scrape', routeImages, {
+  .addConditionalEdges('blueprint', routeImages, {
     draft: 'draft',
     pexels: 'pexels',
   })
