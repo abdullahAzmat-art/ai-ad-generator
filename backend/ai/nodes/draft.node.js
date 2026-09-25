@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import { z } from 'zod';
-import { getOpenRouterClient } from '../lib/openrouter.js';
+import { getLlmClient, hasLlmProvider, GROQ_STRONG_MODEL } from '../lib/llm.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
+import { mockScript } from '../lib/mockData.js';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -80,6 +81,9 @@ function buildPrompt(state, feedback, previousScript) {
   const colors = (scraped?.colors || [brandColor]).join(', ');
   const fonts = (scraped?.fonts || []).join(', ') || 'not specified';
   const ctaHints = (scraped?.ctaHints || []).join(', ') || 'not specified';
+  const productDirection = adType === 'product'
+    ? 'This is a polished product ad. Feature a product in every non-final scene, favor productHero and productSecondary assets, and write the voiceover only about the specific product benefit visible in that scene. The renderer uses a white product stage, a subtle product reveal, and a persistent lower-left brand signature. The final scene becomes a white contact end card.'
+    : 'Create a visual and voiceover sequence appropriate to the advertised business or service.';
 
   // Summarise which asset categories are available
   const assetSummary = Object.entries({
@@ -148,17 +152,64 @@ ${assetSummary}
 === AD BLUEPRINT ===
 ${blueprintStr}
 
+=== CREATIVE DIRECTION ===
+${productDirection}
+
 ${feedbackSection}
+
+=== LAYOUTS (choose one per scene) ===
+- "product-center", "product-left", or "product-right" — a clean product-focused composition. USE FOR: product ads with productHero or productSecondary assets.
+- "full-bleed" — dramatic photo filling the whole screen. USE FOR: hooks, problems, trust, or lifestyle scenes.
+- "split" or "bottom-text" — photo with a solid brand-color copy area. USE FOR: benefits, solutions, and offers.
+- The final CTA scene may use any layout; the renderer promotes it to the appropriate final close automatically.
+
+For a product ad, use product-focused layouts in every non-final scene. For other ads, alternate layouts when it improves the narrative rhythm.
 
 === RULES ===
 1. Produce EXACTLY ${blueprint.length || 3} scenes, strictly following the blueprint order and scene roles.
 2. Each scene's "assetRole" must match what the blueprint says it needs, if available. Fall back to "any" only if that category is unavailable.
 3. Headlines: max 8 words. Subtext: max 12 words. Leave empty string "" if not needed.
 4. Only the final CTA scene should have a non-empty "cta" button text.
-5. Voiceover must fit the scene's durationSec at 2.5 words/sec max.
+5. Voiceover must fit the scene's durationSec at 2.5 words/sec max and describe the on-screen product or benefit for that scene.
 6. Never invent prices, stats, or guarantees not stated above.
 7. Write only for THIS brand — no generic filler copy.
+8. For product ads, do not use lifestyle, person, office, food, or background assets unless no product image is available.
+9. ONLY use copy and offers explicitly found in the scraped product data. DO NOT invent unverified promotions like 'Golden Card'.
+10. Replace unsupported characters and normalize copy. Use standard spaces or hyphens (e.g. 'All Day' or 'All-Day') and absolutely NO special punctuation like □.
 `.trim();
+}
+
+// Narrative order for the final script — the ad must open with a hook and
+// close with the CTA, regardless of the order the model returned.
+const ROLE_RANK = {
+  hook: 0, problem: 0,
+  productHero: 1, 'product-hero': 1, solution: 1,
+  benefits: 2, trust: 3,
+  offer: 4, pricing: 4, promo: 4,
+  cta: 5,
+};
+
+function roleRank(role) {
+  const r = (role || '').toLowerCase().trim();
+  if (r in ROLE_RANK) return ROLE_RANK[r];
+  if (r.includes('hook') || r.includes('problem')) return 0;
+  if (r.includes('product') || r.includes('solution')) return 1;
+  if (r.includes('benefit') || r.includes('feature') || r.includes('trust') || r.includes('review')) return 2;
+  if (r.includes('offer') || r.includes('price') || r.includes('promo') || r.includes('discount')) return 4;
+  if (r.includes('cta') || r.includes('call') || r.includes('order') || r.includes('shop')) return 5;
+  return 3;
+}
+
+function enforceNarrativeOrder(scenes) {
+  const sorted = [...scenes].sort((a, b) => roleRank(a.role) - roleRank(b.role));
+  // Only the final scene may carry a CTA button.
+  sorted.forEach((scene, i) => {
+    if (i < sorted.length - 1) scene.cta = '';
+  });
+  if (sorted.length > 0 && !sorted[sorted.length - 1].cta) {
+    sorted[sorted.length - 1].cta = 'Shop Now';
+  }
+  return sorted;
 }
 
 // ─── Node ─────────────────────────────────────────────────────────────────────
@@ -174,9 +225,14 @@ export async function draftNode(state) {
     iterations = 0,
   } = state;
 
-  if (!process.env.OPENROUTER_API_KEY) {
-    console.warn('[Scene Draft] OPENROUTER_API_KEY missing — returning null script.');
-    return { script: null, error: 'OPENROUTER_API_KEY missing' };
+  if (process.env.USE_MOCK_DATA === '1') {
+    console.warn('[Scene Draft] USE_MOCK_DATA=1 — returning canned script.');
+    return { script: mockScript(aspectRatio), iterations };
+  }
+
+  if (!hasLlmProvider()) {
+    console.warn('[Scene Draft] No LLM API key (OPENROUTER_API_KEY / GROQ_API_KEY) — returning null script.');
+    return { script: null, error: 'LLM API key missing' };
   }
 
   if (!scraped) {
@@ -186,35 +242,53 @@ export async function draftNode(state) {
 
   console.log(`[Scene Draft] ${blueprint.length} blueprint scenes, aspect: ${aspectRatio}`);
 
-  const client = getOpenRouterClient();
+  const client = getLlmClient();
   let script = null;
   let error = null;
 
   try {
     const prompt = buildPrompt(state, feedback, previousScript);
-    const jsonSchema = zodToJsonSchema(ScriptSchema, 'Script');
+    const jsonSchema = zodToJsonSchema(ScriptSchema);
+    delete jsonSchema.$schema;
 
-    const systemPrompt = `
+const systemPrompt = `
 You are a Scene Draft node in an AI advertisement pipeline.
 Produce a structured scene plan following the provided blueprint exactly.
-Return only the JSON object — no markdown, no explanation.
+Return ONLY valid JSON matching this exact structure:
+
+{
+  "scenes": [
+    {
+      "role": "hook",
+      "layout": "full-bleed", 
+      "assetRole": "lifestyle",
+      "headline": "Short hook headline",
+      "subtext": "Optional subtext",
+      "cta": "",
+      "voiceover": "Spoken text goes here",
+      "durationSec": 4,
+      "animation": "slow-zoom" 
+    }
+  ]
+}
+
+CRITICAL RULES:
+1. "layout" MUST be one of: "full-bleed", "product-center", "product-right", "product-left", "top-text", "bottom-text", "split", "overlay".
+2. "animation" MUST be one of: "slow-zoom", "fade-in", "slide-up", "product-reveal", "slide-right", "pulse", "none".
+3. "assetRole" MUST be one of: "productHero", "productSecondary", "lifestyle", "person", "office", "food", "background", "logo", "any".
+
+Output NO markdown formatting. Do not include markdown code blocks (like \`\`\`json). Just the raw JSON object.
 `.trim();
 
     const apiResponse = await client.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+      model: 'nvidia/nemotron-3-super-120b-a12b:free',
+      groqModel: GROQ_STRONG_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt },
       ],
       temperature: 0.3,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'Script',
-          strict: true,
-          schema: jsonSchema,
-        },
-      },
+      response_format: { type: 'json_object' },
       reasoning: { enabled: true },
     });
 
@@ -223,11 +297,13 @@ Return only the JSON object — no markdown, no explanation.
 
     console.log('[Scene Draft] Structured response received.');
 
-    const rawJson = JSON.parse(content);
+    const cleanContent = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const rawJson = JSON.parse(cleanContent);
+    console.log('[Scene Draft] Parsed raw JSON:', JSON.stringify(rawJson, null, 2));
     const validated = ScriptSchema.parse(rawJson);
 
     script = {
-      scenes: validated.scenes,
+      scenes: enforceNarrativeOrder(validated.scenes),
       format: toFormat(aspectRatio),
       adType: state.adType || 'business',
     };

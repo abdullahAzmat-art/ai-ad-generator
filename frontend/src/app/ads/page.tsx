@@ -37,6 +37,20 @@ interface AdCreative {
   textColor: string;
   ctaBg: string;
   ctaText: string;
+  adType?: string;
+  role?: string;
+  layout?: string;
+  assetRole?: string;
+  voiceover?: string;
+  durationSec?: number;
+  animation?: string;
+  imageUrl?: string;
+  logoUrl?: string;
+  brandName?: string;
+  brandUrl?: string;
+  contact?: string;
+  brandColor?: string;
+  isEndCard?: boolean;
 }
 
 // ─── Ad Canvas Preview ───────────────────────────────────────────────────────
@@ -44,6 +58,64 @@ interface AdCreative {
 function AdCanvas({ ad, domain }: { ad: AdCreative; domain: string }) {
   const isStory = ad.format === "story";
   const isBanner = ad.format === "banner";
+  const brandName = ad.brandName || domain;
+  const brandUrl = ad.brandUrl || domain;
+  const brandColor = ad.brandColor || "#0a1945";
+  const brandMark = brandName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
+
+  if (ad.adType === "product" && isStory) {
+    return (
+      <div className="flex items-center justify-center w-full h-full p-6">
+        <div className="relative flex flex-col items-center">
+          <div className="relative rounded-[36px] border-[6px] border-slate-700 bg-white shadow-[0_30px_80px_rgba(0,0,0,0.32)] overflow-hidden" style={{ width: 212, height: 368 }}>
+            <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-20 h-5 bg-black rounded-full z-20" />
+            <div className="absolute inset-x-0 top-0 h-1" style={{ background: brandColor }} />
+            {ad.isEndCard ? (
+              <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
+                {ad.logoUrl && <img src={ad.logoUrl} alt="" className="mb-5 h-14 w-28 object-contain" />}
+                <p className="text-lg font-black tracking-tight text-slate-900">{brandName}</p>
+                <p className="mt-3 text-[10px] font-medium leading-relaxed text-slate-500">{ad.cta || ad.headline}</p>
+                {(ad.contact || brandUrl) && <p className="mt-5 text-[10px] font-bold" style={{ color: brandColor }}>{ad.contact || brandUrl}</p>}
+                <p className="mt-1 text-[8px] text-slate-400">{brandUrl}</p>
+              </div>
+            ) : (
+              <div className="relative h-full px-4 pb-4 pt-10">
+                <div className="absolute left-4 top-14 w-[84px]">
+                  <p className="text-left text-[12px] font-black leading-tight text-slate-900 line-clamp-5">{ad.headline}</p>
+                  {ad.body && <p className="mt-3 text-left text-[8px] leading-relaxed text-slate-500 line-clamp-4">{ad.body}</p>}
+                </div>
+                <div className="absolute right-2 top-12 bottom-20 left-24 flex items-center justify-end">
+                  {ad.imageUrl ? (
+                    <img src={ad.imageUrl} alt="" className="h-full w-full object-contain" />
+                  ) : (
+                    <div className="h-28 w-20 rounded-[20px] bg-slate-100" />
+                  )}
+                </div>
+                <div className="absolute bottom-4 left-4 right-4 flex items-center gap-2.5 border-t border-slate-100 pt-2.5">
+                  {ad.logoUrl ? (
+                    <img src={ad.logoUrl} alt="" className="h-9 w-9 shrink-0 object-contain" />
+                  ) : (
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[10px] font-black text-white" style={{ background: brandColor }}>{brandMark}</div>
+                  )}
+                  <div className="min-w-0 text-left">
+                    <p className="truncate text-[9px] font-black text-slate-900">{brandName}</p>
+                    <p className="truncate text-[7px] text-slate-400">{brandUrl}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="mt-3 w-20 h-1 rounded-full bg-slate-400/40" />
+        </div>
+      </div>
+    );
+  }
 
   if (isStory) {
     return (
@@ -231,20 +303,45 @@ function AdsContent() {
         setVideoUrl(data.videoUrl);
 
         if (data.script && data.script.scenes) {
+          const assets = data.assets || {};
+          const resolvePreviewImage = (assetRole: string, index: number) => {
+            const requested = assets[assetRole];
+            if (Array.isArray(requested) && requested.length > 0) return requested[index % requested.length];
+            if (typeof requested === "string") return requested;
+            if (Array.isArray(assets.productSecondary) && assets.productSecondary.length > 0) return assets.productSecondary[index % assets.productSecondary.length];
+            return assets.productHero || assets.lifestyle?.[0] || null;
+          };
+          const brandName = data.scraped?.brandInformation?.name || data.scraped?.title || domain;
+          const brandColor = /^#[0-9a-f]{3,8}$/i.test(data.scraped?.brandColor || "") ? data.scraped.brandColor : "#0a1945";
+          const contact = data.scraped?.contactBusinessInformation?.phone || data.scraped?.contactBusinessInformation?.email || "";
           const mappedAds: AdCreative[] = data.script.scenes.map((scene: any, i: number) => ({
             id: scene.id || `ad-${i}`,
             format: data.script.format || "story",
             platform: "Generated Ad",
             resolution: "1080×1920",
-            badge: scene.angle || "Variation",
-            headline: scene.headline,
-            body: scene.body,
-            cta: scene.cta,
-            bgFrom: scene.bgFrom,
-            bgTo: scene.bgTo,
-            textColor: scene.textColor,
-            ctaBg: scene.ctaBg,
-            ctaText: scene.ctaText,
+            badge: scene.role || "Product scene",
+            headline: scene.headline || "",
+            body: scene.subtext || "",
+            cta: scene.cta || "",
+            bgFrom: brandColor,
+            bgTo: "#ffffff",
+            textColor: "#111827",
+            ctaBg: brandColor,
+            ctaText: "#ffffff",
+            adType: data.script.adType,
+            role: scene.role,
+            layout: scene.layout,
+            assetRole: scene.assetRole,
+            voiceover: scene.voiceover || "",
+            durationSec: scene.durationSec,
+            animation: scene.animation,
+            imageUrl: resolvePreviewImage(scene.assetRole, i),
+            logoUrl: assets.logo || data.scraped?.logo,
+            brandName,
+            brandUrl: domain,
+            contact,
+            brandColor,
+            isEndCard: data.script.adType === "product" && i === data.script.scenes.length - 1,
           }));
           setAds(mappedAds);
         }
@@ -266,21 +363,16 @@ function AdsContent() {
     if (!threadId) return;
     setDownloading(true);
     try {
-      // Re-map the Ads array back into the backend scene format
-      const scenes = ads.map(a => ({
-        id: a.id,
-        angle: a.badge,
-        headline: a.headline,
-        body: a.body,
-        cta: a.cta,
-        imageIndex: 0, // Simplified for now
-        durationSec: 4,
-        voiceover: "",
-        bgFrom: a.bgFrom,
-        bgTo: a.bgTo,
-        textColor: a.textColor,
-        ctaBg: a.ctaBg,
-        ctaText: a.ctaText,
+      const scenes = ads.map((ad, index) => ({
+        role: ad.role || (index === ads.length - 1 ? "cta" : "product-hero"),
+        layout: ad.layout || "product-center",
+        assetRole: ad.assetRole || (index === 0 ? "productHero" : "productSecondary"),
+        headline: ad.headline,
+        subtext: ad.body,
+        cta: ad.cta,
+        durationSec: ad.durationSec || 4,
+        voiceover: ad.voiceover || ad.headline,
+        animation: ad.animation || "product-reveal",
       }));
 
       const res = await fetch("http://localhost:4000/api/resume", {
@@ -341,6 +433,10 @@ function AdsContent() {
             <div>
               <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400 block mb-1.5">Body / Subheadline</label>
               <textarea value={currentAd.body} onChange={(e) => updateAd({ body: e.target.value })} rows={3} className="w-full text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 resize-none outline-none focus:border-blue-500 focus:bg-white transition-all duration-200 leading-relaxed" />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400 block mb-1.5">Voiceover</label>
+              <textarea value={currentAd.voiceover || ""} onChange={(e) => updateAd({ voiceover: e.target.value })} rows={3} className="w-full text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 resize-none outline-none focus:border-blue-500 focus:bg-white transition-all duration-200 leading-relaxed" />
             </div>
             <div>
               <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400 block mb-1.5">CTA Button Text</label>

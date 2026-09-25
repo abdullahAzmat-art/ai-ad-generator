@@ -176,7 +176,7 @@ export const adGraph = new StateGraph(AdState)
   .addNode('scrape', scrapeNode)
   .addNode('classify_assets', classifyAssetsNode)
   .addNode('detect_ad_type', detectAdTypeNode)
-  .addNode('blueprint', blueprintNode)
+  .addNode('ad_blueprint', blueprintNode)
   .addNode('pexels', pexelsNode)
   .addNode('draft', draftNode)
   .addNode('review', reviewNode)
@@ -188,9 +188,9 @@ export const adGraph = new StateGraph(AdState)
   .addEdge(START, 'scrape')
   .addEdge('scrape', 'classify_assets')
   .addEdge('classify_assets', 'detect_ad_type')
-  .addEdge('detect_ad_type', 'blueprint')
+  .addEdge('detect_ad_type', 'ad_blueprint')
   
-  .addConditionalEdges('blueprint', routeImages, {
+  .addConditionalEdges('ad_blueprint', routeImages, {
     draft: 'draft',
     pexels: 'pexels',
   })

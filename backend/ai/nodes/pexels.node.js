@@ -1,9 +1,14 @@
 import 'dotenv/config';
-import { getOpenRouterClient } from '../lib/openrouter.js';
+import { getLlmClient, hasLlmProvider, GROQ_FAST_MODEL } from '../lib/llm.js';
 
 // ─── Node ─────────────────────────────────────────────────────────────────────
 
 export async function pexelsNode(state) {
+  if (process.env.USE_MOCK_DATA === '1') {
+    console.warn('[Pexels Node] USE_MOCK_DATA=1 — skipping stock search.');
+    return { stockImages: [] };
+  }
+
   const { scraped, aspectRatio, missingAssets = [] } = state;
   const pexelsKey = process.env.PEXELS_API_KEY;
 
@@ -17,7 +22,7 @@ export async function pexelsNode(state) {
   }
 
   const stockImages = [];
-  const client = process.env.OPENROUTER_API_KEY ? getOpenRouterClient() : null;
+  const client = hasLlmProvider() ? getLlmClient() : null;
   const uniqueMissing = [...new Set(missingAssets)];
 
   const orientation =
@@ -34,6 +39,7 @@ We need a "${assetType}" image for an advertisement.
 Based on this scraped website data, output the single best Pexels search term to find this specific type of image.
 For example, if assetType is "lifestyle" and the product is "luxury perfume", output "luxury perfume woman".
 If assetType is "office" and it's a dental clinic, output "modern dental clinic".
+If assetType is "productHero" or "productSecondary", use an isolated product packshot query with a white background, such as "luxury perfume bottle white background".
 Output ONLY the search term — no quotes, no punctuation, nothing else.
 
 Website Title: ${scraped.title || ''}
@@ -43,10 +49,11 @@ Text snippet: ${(scraped.pageText || '').slice(0, 500)}
 
       try {
         const apiResponse = await client.chat.completions.create({
-          model: 'openai/gpt-oss-120b',
+          model: 'nvidia/nemotron-3-super-120b-a12b:free',
+          groqModel: GROQ_FAST_MODEL,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.1,
-          max_tokens: 20,
+          max_tokens: 500,
           reasoning: { enabled: true }
         });
         

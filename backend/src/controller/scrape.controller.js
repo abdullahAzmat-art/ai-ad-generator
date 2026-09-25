@@ -20,10 +20,10 @@ export async function scrapeController(request, response) {
     return response.json({
       thread_id,
       scraped: result.scraped,
+      assets: result.assets,
       stockImages: result.stockImages,
-      script: result.script,       // { scenes: [3], brandColor, format }
+      script: result.script,
       videoUrl: result.videoUrl,
-      // You can also check if result contains an interrupt payload here depending on LangGraph version
     });
   } catch (error) {
     console.error('Scrape workflow failed:', error);

@@ -1,12 +1,13 @@
 import 'dotenv/config';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { getOpenRouterClient } from '../lib/openrouter.js';
+import { getLlmClient, hasLlmProvider, GROQ_FAST_MODEL } from '../lib/llm.js';
+import { mockAssets } from '../lib/mockData.js';
 
 const AssetClassificationSchema = z.object({
   logo: z.string().nullable().describe("The URL of the best logo image, or null if none"),
-  productHero: z.string().nullable().describe("The URL of the primary hero product image, or null if none"),
-  productSecondary: z.array(z.string()).describe("URLs of secondary product images, side views, packaging, etc."),
+  productHero: z.string().nullable().describe("The strongest isolated product image, prioritizing a clean white or plain background, or null if none"),
+  productSecondary: z.array(z.string()).describe("Additional distinct product images, prioritizing isolated product, packaging, side views, and clean white or plain backgrounds"),
   lifestyle: z.array(z.string()).describe("URLs of lifestyle images showing the product in use or people/ambiance"),
   person: z.array(z.string()).describe("URLs of images focused primarily on a person (e.g., founder, model)"),
   office: z.array(z.string()).describe("URLs of images showing an office, storefront, or building"),
@@ -15,6 +16,11 @@ const AssetClassificationSchema = z.object({
 });
 
 export async function classifyAssetsNode(state) {
+  if (process.env.USE_MOCK_DATA === '1') {
+    console.warn('[Classify Assets Node] USE_MOCK_DATA=1 — returning canned assets.');
+    return { assets: mockAssets() };
+  }
+
   const images = state.scraped?.images || [];
   const logoUrl = state.scraped?.logo;
   
@@ -35,8 +41,8 @@ export async function classifyAssetsNode(state) {
     };
   }
 
-  if (!process.env.OPENROUTER_API_KEY) {
-    console.warn('[Classify Assets Node] OPENROUTER_API_KEY missing — skipping LLM classification.');
+  if (!hasLlmProvider()) {
+    console.warn('[Classify Assets Node] No LLM API key (OPENROUTER_API_KEY / GROQ_API_KEY) — skipping LLM classification.');
     return {
       assets: {
         logo: logoUrl || (images.length > 0 ? images[0] : null),
@@ -51,8 +57,9 @@ export async function classifyAssetsNode(state) {
     };
   }
 
-  const client = getOpenRouterClient();
-  const jsonSchema = zodToJsonSchema(AssetClassificationSchema, 'AssetClassification');
+  const client = getLlmClient();
+  const jsonSchema = zodToJsonSchema(AssetClassificationSchema);
+  delete jsonSchema.$schema;
 
   const contentParts = [
     {
@@ -75,7 +82,23 @@ export async function classifyAssetsNode(state) {
       messages: [
         {
           role: 'system',
-          content: 'You are an Image/asset organizer. Your purpose is to understand what each image actually is and categorize them. Return ONLY valid JSON matching the requested schema.'
+          content: `You are an Image/asset organizer. Your purpose is to understand what each image actually is and categorize them.
+For productHero and productSecondary, prioritize distinct product packshots that are isolated on a white or clean plain background. Use lifestyle only for contextual use shots.
+CRITICAL: Use ONLY verified same-brand product images. Do not mix unrelated bottles, styles, or competitor products. If an image is an unrelated product, ignore it (do not include its URL).
+Return ONLY valid JSON matching this exact structure:
+
+{
+  "logo": "url_string_or_null",
+  "productHero": "url_string_or_null",
+  "productSecondary": ["url_string"],
+  "lifestyle": ["url_string"],
+  "person": ["url_string"],
+  "office": ["url_string"],
+  "food": ["url_string"],
+  "background": ["url_string"]
+}
+
+Output NO markdown formatting. Do not include markdown code blocks (like \`\`\`json). Just the raw JSON object.`
         },
         {
           role: 'user',
@@ -83,19 +106,13 @@ export async function classifyAssetsNode(state) {
         }
       ],
       temperature: 0.1,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'AssetClassification',
-          strict: true,
-          schema: jsonSchema,
-        }
-      }
+      response_format: { type: 'json_object' }
     });
 
     const content = apiResponse.choices?.[0]?.message?.content;
     if (content) {
-      const rawJson = JSON.parse(content);
+      const cleanContent = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+      const rawJson = JSON.parse(cleanContent);
       const parsed = AssetClassificationSchema.parse(rawJson);
       
       const filterUrl = (url) => allImages.includes(url) ? url : null;
