@@ -17,6 +17,7 @@ import {
   PanelRightOpen,
   X,
 } from "lucide-react";
+import { readScrapeCache, writeScrapeCache } from "../../lib/scrapeCache";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,37 @@ interface AdCreative {
   contact?: string;
   brandColor?: string;
   isEndCard?: boolean;
+}
+
+interface ScrapeScene {
+  id?: string;
+  role?: string;
+  headline?: string;
+  subtext?: string;
+  cta?: string;
+  layout?: string;
+  assetRole?: string;
+  voiceover?: string;
+  durationSec?: number;
+  animation?: string;
+}
+
+interface ScrapeData {
+  thread_id?: string;
+  videoUrl?: string | null;
+  assets?: Record<string, string[] | string | undefined>;
+  scraped?: {
+    title?: string;
+    logo?: string;
+    brandColor?: string;
+    brandInformation?: { name?: string };
+    contactBusinessInformation?: { phone?: string; email?: string };
+  };
+  script?: {
+    format?: AdFormat;
+    adType?: string;
+    scenes?: ScrapeScene[];
+  } | null;
 }
 
 // ─── Ad Canvas Preview ───────────────────────────────────────────────────────
@@ -281,9 +313,70 @@ function AdsContent() {
 
   React.useEffect(() => {
     let isMounted = true;
+    const applyData = (data: ScrapeData) => {
+      if (!isMounted) return;
+      setThreadId(data.thread_id ?? null);
+      setVideoUrl(data.videoUrl ?? null);
+
+      const scenes = data.script?.scenes;
+      if (!scenes) return;
+      const assets = data.assets ?? {};
+      const resolvePreviewImage = (assetRole: string, index: number): string | undefined => {
+        const requested = assets[assetRole];
+        if (Array.isArray(requested) && requested.length > 0) return requested[index % requested.length];
+        if (typeof requested === "string") return requested;
+        const secondary = assets.productSecondary;
+        if (Array.isArray(secondary) && secondary.length > 0) return secondary[index % secondary.length];
+        const hero = assets.productHero;
+        const heroImage = Array.isArray(hero) ? hero[0] : hero;
+        return heroImage || assets.lifestyle?.[0] || undefined;
+      };
+      const brandName = data.scraped?.brandInformation?.name || data.scraped?.title || domain;
+      const scrapedBrandColor = data.scraped?.brandColor || "";
+      const brandColor = /^#[0-9a-f]{3,8}$/i.test(scrapedBrandColor) ? scrapedBrandColor : "#0a1945";
+      const contact = data.scraped?.contactBusinessInformation?.phone || data.scraped?.contactBusinessInformation?.email || "";
+      const rawLogo = assets.logo;
+      const logo = Array.isArray(rawLogo) ? rawLogo[0] : rawLogo;
+      const mappedAds: AdCreative[] = scenes.map((scene, i) => ({
+        id: scene.id || `ad-${i}`,
+        format: data.script?.format || "story",
+        platform: "Generated Ad",
+        resolution: "1080×1920",
+        badge: scene.role || "Product scene",
+        headline: scene.headline || "",
+        body: scene.subtext || "",
+        cta: scene.cta || "",
+        bgFrom: brandColor,
+        bgTo: "#ffffff",
+        textColor: "#111827",
+        ctaBg: brandColor,
+        ctaText: "#ffffff",
+        adType: data.script?.adType,
+        role: scene.role,
+        layout: scene.layout,
+        assetRole: scene.assetRole,
+        voiceover: scene.voiceover || "",
+        durationSec: scene.durationSec,
+        animation: scene.animation,
+        imageUrl: resolvePreviewImage(scene.assetRole || "", i),
+        logoUrl: logo || data.scraped?.logo,
+        brandName,
+        brandUrl: domain,
+        contact,
+        brandColor,
+        isEndCard: data.script?.adType === "product" && i === scenes.length - 1,
+      }));
+      setAds(mappedAds);
+    };
+
     const fetchAds = async () => {
       try {
         setLoading(true);
+        const cached = readScrapeCache<ScrapeData>(rawUrl);
+        if (cached) {
+          applyData(cached);
+          return;
+        }
         const res = await fetch("http://localhost:4000/api/scrape", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -295,56 +388,11 @@ function AdsContent() {
         
         if (data.error) {
           console.error(data.error);
-          setLoading(false);
           return;
         }
 
-        setThreadId(data.thread_id);
-        setVideoUrl(data.videoUrl);
-
-        if (data.script && data.script.scenes) {
-          const assets = data.assets || {};
-          const resolvePreviewImage = (assetRole: string, index: number) => {
-            const requested = assets[assetRole];
-            if (Array.isArray(requested) && requested.length > 0) return requested[index % requested.length];
-            if (typeof requested === "string") return requested;
-            if (Array.isArray(assets.productSecondary) && assets.productSecondary.length > 0) return assets.productSecondary[index % assets.productSecondary.length];
-            return assets.productHero || assets.lifestyle?.[0] || null;
-          };
-          const brandName = data.scraped?.brandInformation?.name || data.scraped?.title || domain;
-          const brandColor = /^#[0-9a-f]{3,8}$/i.test(data.scraped?.brandColor || "") ? data.scraped.brandColor : "#0a1945";
-          const contact = data.scraped?.contactBusinessInformation?.phone || data.scraped?.contactBusinessInformation?.email || "";
-          const mappedAds: AdCreative[] = data.script.scenes.map((scene: any, i: number) => ({
-            id: scene.id || `ad-${i}`,
-            format: data.script.format || "story",
-            platform: "Generated Ad",
-            resolution: "1080×1920",
-            badge: scene.role || "Product scene",
-            headline: scene.headline || "",
-            body: scene.subtext || "",
-            cta: scene.cta || "",
-            bgFrom: brandColor,
-            bgTo: "#ffffff",
-            textColor: "#111827",
-            ctaBg: brandColor,
-            ctaText: "#ffffff",
-            adType: data.script.adType,
-            role: scene.role,
-            layout: scene.layout,
-            assetRole: scene.assetRole,
-            voiceover: scene.voiceover || "",
-            durationSec: scene.durationSec,
-            animation: scene.animation,
-            imageUrl: resolvePreviewImage(scene.assetRole, i),
-            logoUrl: assets.logo || data.scraped?.logo,
-            brandName,
-            brandUrl: domain,
-            contact,
-            brandColor,
-            isEndCard: data.script.adType === "product" && i === data.script.scenes.length - 1,
-          }));
-          setAds(mappedAds);
-        }
+        writeScrapeCache(rawUrl, data);
+        applyData(data);
       } catch (err) {
         console.error(err);
       } finally {
@@ -411,7 +459,7 @@ function AdsContent() {
     { key: "gallery", label: "Gallery", icon: <Images className="w-4 h-4" /> },
   ];
 
-  const SidebarPanel = () => (
+  const renderSidebarPanel = () => (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Tab bar */}
       <div className="flex border-b border-slate-200 bg-white shrink-0">
@@ -568,7 +616,7 @@ function AdsContent() {
 
         {/* RIGHT: Desktop sidebar */}
         <aside className="hidden lg:flex flex-col w-[320px] xl:w-[360px] shrink-0 border-l border-slate-200 bg-white">
-          <SidebarPanel />
+          {renderSidebarPanel()}
         </aside>
       </div>
 
@@ -584,7 +632,7 @@ function AdsContent() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex-1 overflow-hidden"><SidebarPanel /></div>
+            <div className="flex-1 overflow-hidden">{renderSidebarPanel()}</div>
           </div>
         </>
       )}

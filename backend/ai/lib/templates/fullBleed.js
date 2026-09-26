@@ -1,94 +1,71 @@
 /**
- * Layout 1 — Dark Hero (Full Bleed + Bottom Translucent Strip)
- * Matches the professional reference: full-frame moody photo with a slow
- * zoom, a translucent black strip across the bottom 30%, and one bold white
- * headline centered inside the strip.
+ * Layout 1 — Full Bleed (Photo + Bottom Frosted Caption + Persistent Branding)
+ * Full-frame photo with slow Ken Burns zoom, frosted glass caption strip at
+ * bottom-third, persistent brand pill + QR code on every frame.
  */
 
-import { voiceover } from './helpers.js';
+import { brandBar, qrCode, voiceover } from './helpers.js';
 
-export function fullBleed(scene, imageUrl) {
+export function fullBleed(scene, imageUrl, brand = {}) {
   const dur = scene.durationSec || 4;
   const sub = (scene.subtext || '').trim();
   const hasSub = sub.length > 0;
 
   return {
     duration: dur,
-    transition: { type: "fade", duration: 0.5 },
+    transition: { type: 'fade', duration: 0.6 },
     elements: [
 
-      // 1. Full-frame photo, slow zoom-in
+      // 1. Full-frame photo, slow Ken Burns zoom
       {
-        type: "image",
+        type: 'image',
         src: imageUrl,
         x: 0,
         y: 0,
         width: 1080,
         height: 1920,
-        resize: "cover",
+        resize: 'cover',
         zoom: 3,
         start: 0,
-        duration: dur
+        duration: dur,
       },
 
-      // 2. Translucent black strip — bottom 30%
+      // 2. Soft gradient vignette at bottom so caption is readable
       {
-        type: "html",
-        html: '<div style="width:1080px;height:580px;background:rgba(0,0,0,0.5);"></div>',
+        type: 'html',
+        html: '<div style="width:1080px;height:700px;background:linear-gradient(to top,rgba(0,0,0,0.55) 0%,transparent 100%);"></div>',
         x: 0,
-        y: 1340,
+        y: 1220,
         width: 1080,
-        height: 580,
-        start: 0,
-        duration: dur
-      },
-
-      // 3. Headline — white bold, slides gently up into the strip
-      {
-        type: "text",
-        text: scene.headline || "",
-        x: 60,
-        y: hasSub ? 1460 : 1520,
-        width: 960,
-        height: 160,
+        height: 700,
         start: 0,
         duration: dur,
-        keyframes: [
-          { time: 0, y: hasSub ? 1500 : 1560 },
-          { time: 0.5, y: hasSub ? 1460 : 1520 }
-        ],
-        settings: {
-          "font-family": "Montserrat",
-          "color": "#FFFFFF",
-          "font-size": "54px",
-          "font-weight": "700",
-          "text-align": "center"
-        },
-        "fade-in": 0.4
       },
 
-      // 4. Subtext — only when the copy provides one
-      ...(hasSub ? [{
-        type: "text",
-        text: sub,
-        x: 80,
-        y: 1640,
-        width: 920,
-        height: 120,
-        start: 0.4,
-        duration: Math.max(0, dur - 0.4),
-        settings: {
-          "font-family": "Montserrat",
-          "color": "#E8E8E8",
-          "font-size": "32px",
-          "font-weight": "400",
-          "text-align": "center"
-        },
-        "fade-in": 0.4
+      // 3. Frosted caption block — bottom-third, only when content exists
+      ...(scene.headline ? [{
+        type: 'html',
+        html: `<div style="padding:20px 32px;max-width:700px;">
+          <p style="margin:0;font-family:Montserrat,sans-serif;font-size:38px;font-weight:700;color:#FFFFFF;text-shadow:0 2px 8px rgba(0,0,0,0.4);letter-spacing:-0.3px;line-height:1.2;">${scene.headline}</p>
+          ${hasSub ? `<p style="margin:10px 0 0;font-family:Montserrat,sans-serif;font-size:26px;font-weight:400;color:rgba(255,255,255,0.88);text-shadow:0 1px 4px rgba(0,0,0,0.3);">${sub}</p>` : ''}
+        </div>`,
+        x: 60,
+        y: hasSub ? 1490 : 1560,
+        width: 760,
+        height: hasSub ? 170 : 100,
+        start: 0.35,
+        duration: Math.max(0, dur - 0.35),
+        'fade-in': 0.4,
       }] : []),
 
-      // 5. Voiceover
-      voiceover(scene.voiceover)
-    ]
+      // 4. Persistent bottom-left brand pill
+      ...brandBar(brand, dur),
+
+      // 5. Persistent top-right QR code
+      ...qrCode(brand, dur),
+
+      // 6. Voiceover
+      voiceover(scene.voiceover),
+    ],
   };
 }

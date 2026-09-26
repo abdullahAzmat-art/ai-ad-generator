@@ -150,6 +150,94 @@ select {
   animation: fade-overlay 0.3s ease forwards;
 }
 
+/* ─── Generate Ad modal ─────────────────────────────────────────────────── */
+
+@keyframes modal-pop {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-modal-pop {
+  animation: modal-pop 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes video-reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.88) translateY(16px);
+    filter: blur(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+.animate-video-reveal {
+  animation: video-reveal 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pulse-ring {
+  0%   { transform: scale(0.55); opacity: 0.9; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 1.8s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+
+@keyframes scan-y {
+  0%   { top: 5%; }
+  50%  { top: 90%; }
+  100% { top: 5%; }
+}
+
+.animate-scan-y {
+  animation: scan-y 4.5s ease-in-out infinite;
+}
+
+@keyframes float-y {
+  0%, 100% { transform: translateY(-7px); }
+  50%      { transform: translateY(9px); }
+}
+
+.animate-float-y {
+  animation: float-y 5s ease-in-out infinite;
+}
+
+@keyframes spin-slower {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slower {
+  animation: spin-slower 9s linear infinite;
+}
+
+@keyframes bg-pan {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+.animate-bg-pan {
+  animation: bg-pan 2.2s linear infinite;
+}
+
+@keyframes soft-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+.animate-soft-blink {
+  animation: soft-blink 1.4s ease-in-out infinite;
+}
+
 /* Scroll reveal utilities */
 [data-animate] {
   opacity: 0;

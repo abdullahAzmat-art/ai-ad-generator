@@ -1,23 +1,17 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
 import { ArrowRight, Wand2 } from "lucide-react";
+import GenerateAdModal from "./GenerateAdModal";
 
 export default function HeroSection() {
   const [url, setUrl] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const router = useRouter();
+  const [modalOpen, setModalOpen] = useState(false);
 
   const handleGenerate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
-    setIsGenerating(true);
-    
-    // Smooth transition: show spinner briefly then slide/navigate to the ads showcase page
-    setTimeout(() => {
-      router.push(`/ads?url=${encodeURIComponent(url)}`);
-    }, 800);
+    setModalOpen(true);
   };
 
   return (
@@ -72,9 +66,8 @@ export default function HeroSection() {
 
           {/* Generate Ads Button (Dark Navy Blue) */}
           <button
-            disabled={isGenerating}
             type="submit"
-            className="group relative px-6 sm:px-9 py-3.5 sm:py-4 rounded-full font-bold text-white transition-all overflow-hidden disabled:opacity-70 disabled:cursor-not-allowed ml-2 shrink-0 flex items-center justify-center min-w-[150px] sm:min-w-[190px] shadow-[0_10px_25px_rgba(10,25,70,0.25)] hover:shadow-[0_14px_30px_rgba(10,25,70,0.35)] hover:-translate-y-0.5 text-base sm:text-lg cursor-pointer"
+            className="group relative px-6 sm:px-9 py-3.5 sm:py-4 rounded-full font-bold text-white transition-all overflow-hidden ml-2 shrink-0 flex items-center justify-center min-w-[150px] sm:min-w-[190px] shadow-[0_10px_25px_rgba(10,25,70,0.25)] hover:shadow-[0_14px_30px_rgba(10,25,70,0.35)] hover:-translate-y-0.5 text-base sm:text-lg cursor-pointer"
           >
             {/* Navy Blue Gradient Background */}
             <div className="absolute inset-0 bg-gradient-to-r from-[#0a1945] via-[#0f2873] to-[#1e3a8a] transition-all duration-500" />
@@ -90,19 +83,15 @@ export default function HeroSection() {
 
             {/* Button Label & Icon */}
             <span className="relative z-10 flex items-center gap-2.5 drop-shadow-sm">
-              {isGenerating ? (
-                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-              ) : (
-                <>
-                  <span>Generate Ads</span>
-                  <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform duration-300" />
-                </>
-              )}
+              <span>Generate Ads</span>
+              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform duration-300" />
             </span>
           </button>
         </form>
 
       </div>
+
+      {modalOpen && <GenerateAdModal url={url} onClose={() => setModalOpen(false)} />}
     </section>
   );
 }

@@ -1,18 +1,40 @@
-import { brandSignature, voiceover } from './helpers.js';
+/**
+ * Premium Minimal Product Showcase Scene
+ *
+ * Full-bleed product photography with Ken Burns slow-zoom against a
+ * soft studio gradient. No split panel. No loud headline blocks.
+ * A small bottom-third caption fades in for context, and persistent
+ * branding (bottom-left pill + top-right QR) stays on every frame.
+ */
+
+import { brandBar, qrCode, voiceover } from './helpers.js';
 
 export function productShowcase(scene, imageUrl, brand) {
   const duration = scene.durationSec || 4;
-  const subtext = (scene.subtext || '').trim();
-  const productStartX = scene.animation === 'product-reveal' ? 680 : 640;
-  const productEndX = 640;
+  const headline = (scene.headline || '').trim();
+  const subtext  = (scene.subtext  || '').trim();
+
+  // Ken Burns: subtle integer zoom (JSON2Video requires an integer)
+  const zoomLevel = 2; // 2 = subtle slow zoom-in
+
+  // Determine slow drift direction per scene role for variety
+  const driftMap = {
+    hook:          { x0: 0,    y0: 0    },
+    'product-hero':{ x0: -20,  y0: 0    },
+    benefits:      { x0: 0,    y0: -20  },
+    offer:         { x0: 20,   y0: 0    },
+  };
+  const drift = driftMap[scene.role] || { x0: 0, y0: 0 };
 
   return {
     duration,
-    transition: { type: 'fade', duration: 0.35 },
+    transition: { type: 'fade', duration: 0.6 },   // smooth crossfade between scenes
     elements: [
+
+      // 1. Soft studio gradient background (white → light cool-gray)
       {
         type: 'html',
-        html: '<div style="width:1080px;height:1920px;background:#FFFFFF;"></div>',
+        html: '<div style="width:1080px;height:1920px;background:linear-gradient(160deg,#FFFFFF 0%,#F3F4F6 55%,#E8E9EC 100%);"></div>',
         x: 0,
         y: 0,
         width: 1080,
@@ -20,79 +42,45 @@ export function productShowcase(scene, imageUrl, brand) {
         start: 0,
         duration,
       },
-      {
-        type: 'html',
-        html: `<div style="width:1080px;height:12px;background:${brand.color};"></div>`,
-        x: 0,
-        y: 0,
-        width: 1080,
-        height: 12,
-        start: 0,
-        duration,
-      },
-      {
-        type: 'html',
-        html: `<div style="width:8px;height:440px;background:${brand.color};border-radius:4px;"></div>`,
-        x: 74,
-        y: 600,
-        width: 8,
-        height: 440,
-        start: 0,
-        duration,
-      },
-      {
-        type: 'text',
-        text: scene.headline || '',
-        x: 110,
-        y: 600,
-        width: 400,
-        height: 250,
-        start: 0,
-        duration,
-        settings: {
-          'font-family': 'Montserrat',
-          color: '#111827',
-          'font-size': '58px',
-          'font-weight': '800',
-          'text-align': 'left',
-        },
-        'fade-in': 0.28,
-      },
-      ...(subtext ? [{
-        type: 'text',
-        text: subtext,
-        x: 110,
-        y: 895,
-        width: 390,
-        height: 150,
-        start: 0.2,
-        duration: Math.max(0, duration - 0.2),
-        settings: {
-          'font-family': 'Montserrat',
-          color: '#4B5563',
-          'font-size': '32px',
-          'font-weight': '500',
-          'text-align': 'left',
-        },
-        'fade-in': 0.3,
-      }] : []),
+
+      // 2. Full-frame product image — Ken Burns slow zoom + gentle drift
       {
         type: 'image',
         src: imageUrl,
-        x: 500,
-        y: 150,
-        width: 540,
-        height: 1400,
-        resize: 'contain',
+        x: 0 + drift.x0,
+        y: 0 + drift.y0,
+        width: 1080,
+        height: 1920,
+        resize: 'contain',          // keeps full bottle visible, gradient shows around it
+        zoom: zoomLevel,            // integer required by JSON2Video
         start: 0,
         duration,
-        keyframes: [
-          { time: 0, x: 530 },
-          { time: 0.55, x: 500 },
-        ],
-        'fade-in': 0.3,
+        'fade-in': 0.4,
       },
-      ...brandSignature(brand, duration),
+
+      // 3. Full-width caption strip — centered text
+      ...(headline ? [{
+        type: 'html',
+        html: `<div style="width:1080px;height:${subtext ? 220 : 140}px;background:rgba(255,255,255,0.93);box-sizing:border-box;padding:20px 44px;display:flex;flex-direction:column;justify-content:center;align-items:center;box-shadow:0 -2px 24px rgba(0,0,0,0.10);">
+          <p style="margin:0;font-family:Montserrat,sans-serif;font-size:60px;font-weight:800;color:#111827;letter-spacing:-1px;line-height:1.15;text-align:center;width:100%;">${headline}</p>
+          ${subtext ? `<p style="margin:12px 0 0;font-family:Montserrat,sans-serif;font-size:40px;font-weight:400;color:#6B7280;line-height:1.3;text-align:center;width:100%;">${subtext}</p>` : ''}
+        </div>`,
+        x: 0,
+        y: subtext ? 1550 : 1610,
+        width: 1080,
+        height: subtext ? 220 : 140,
+        start: 0.4,
+        duration: Math.max(0, duration - 0.4),
+        'fade-in': 0.4,
+      }] : []),
+
+      // 4. Persistent bottom-left brand pill
+      ...brandBar(brand, duration),
+
+      // 5. Persistent top-right QR code
+      ...qrCode(brand, duration),
+
+      // 6. Voiceover
       voiceover(scene.voiceover),
     ],
   };

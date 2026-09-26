@@ -31,14 +31,19 @@ async function resolveImageUrl(scene, assets, stockImages, sceneIndex) {
     if (!url || typeof url !== 'string') continue;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       const res = await fetch(url, { method: 'HEAD', signal: controller.signal });
       clearTimeout(timeoutId);
-      if (res.ok && res.headers.get('content-type')?.toLowerCase().startsWith('image/')) {
-        return url;
+      // Only skip URLs that explicitly return a client/server error (4xx/5xx)
+      if (res.status >= 400) {
+        console.warn(`[Render Node] Skipping broken image (HTTP ${res.status}): ${url}`);
+        continue;
       }
+      return url;
     } catch {
-      continue;
+      // Network error, timeout, or redirect issue — still try the URL.
+      // The render engine will handle it; don't silently drop valid CDN links.
+      return url;
     }
   }
 
@@ -78,32 +83,38 @@ function createBrand(scraped, assets, url, adType) {
   };
 }
 
-function pickTemplate(scene, imageUrl, brand, isFinalScene, templates) {
+function pickTemplate(scene, imageUrl, brand, isFinalScene, isFirstScene, templates) {
+  // 1. PRODUCT ADS
   if (brand.adType === 'product') {
     return isFinalScene
       ? templates['product-end-card'](scene, brand)
       : templates['product-showcase'](scene, imageUrl, brand);
   }
 
+  // 2. SERVICE / BUSINESS ADS
+  if (isFirstScene) {
+    return templates['service-intro'](scene, brand);
+  }
+
+  if (isFinalScene) {
+    return templates['service-end-card'](scene, brand);
+  }
+
+  // Middle scenes for service ads: use full-bleed or split showing the work
   const layout = scene.layout || 'full-bleed';
 
   switch (layout) {
-    case 'full-bleed':
-    case 'overlay':
-    case 'top-text':
-      return templates['full-bleed'](scene, imageUrl);
     case 'split':
     case 'bottom-text':
     case 'product-left':
     case 'product-right':
     case 'product-center':
-      return isFinalScene && scene.cta?.trim()
-        ? templates['cta-close'](scene, imageUrl, brand.color)
-        : templates.split(scene, imageUrl, brand.color);
+      return templates.split(scene, imageUrl, brand.color, brand);
+    case 'full-bleed':
+    case 'overlay':
+    case 'top-text':
     default:
-      return isFinalScene && scene.cta?.trim()
-        ? templates['cta-close'](scene, imageUrl, brand.color)
-        : templates['full-bleed'](scene, imageUrl);
+      return templates['full-bleed'](scene, imageUrl, brand);
   }
 }
 
@@ -148,10 +159,17 @@ export async function renderNode(state) {
   try {
     scenes = await Promise.all(script.scenes.map(async (scene, index) => {
       const isFinalScene = index === script.scenes.length - 1;
+      const isFirstScene = index === 0;
+      
       const isProductEndCard = brand.adType === 'product' && isFinalScene;
+      const isServiceIntro = brand.adType === 'business' && isFirstScene;
+      const isServiceEndCard = brand.adType === 'business' && isFinalScene;
+      
+      const needsImage = !(isProductEndCard || isServiceIntro || isServiceEndCard);
+
       const imageUrl = await resolveImageUrl(scene, assets, stockImages, index);
 
-      if (!imageUrl && !isProductEndCard) {
+      if (!imageUrl && needsImage) {
         throw new Error(
           `Scene ${index + 1} (${scene.role}): No image found for assetRole "${scene.assetRole}". ` +
           `Available assets: ${Object.keys(assets).filter((key) => assets[key]).join(', ') || 'none'}`
@@ -162,12 +180,14 @@ export async function renderNode(state) {
         `[Render Node] Scene ${index + 1} [${scene.role}] layout="${scene.layout}" assetRole="${scene.assetRole}"`
       );
 
-      return pickTemplate(scene, imageUrl, brand, isFinalScene, TEMPLATES);
+      return pickTemplate(scene, imageUrl, brand, isFinalScene, isFirstScene, TEMPLATES);
     }));
   } catch (error) {
     console.error('[Render Node] Scene build failed:', error.message);
     return { videoUrl: null, error: error.message };
   }
+
+  const totalDuration = script.scenes.reduce((acc, scene) => acc + (scene.durationSec || 4), 0);
 
   const payload = {
     resolution: RESOLUTION_PRESETS[aspectRatio] || 'instagram-story',
@@ -176,9 +196,10 @@ export async function renderNode(state) {
     elements: [
       {
         type: 'audio',
-        src: 'https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3', // Soft upbeat background music
+        src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', // Reliable background music for testing
         volume: 0.15,
         start: 0,
+        duration: totalDuration,
         'fade-in': 1,
         'fade-out': 2
       }
