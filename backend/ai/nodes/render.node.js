@@ -249,11 +249,21 @@ export async function renderNode(state) {
 
     for (let retries = 0; retries < 36; retries++) {
       await new Promise((resolve) => setTimeout(resolve, 5000));
-      const pollResponse = await fetch(
-        `https://api.json2video.com/v2/movies?project=${projectId}`,
-        { headers: { 'x-api-key': apiKey } }
-      );
-      const pollData = await pollResponse.json();
+      
+      let pollResponse;
+      let pollData;
+      
+      try {
+        pollResponse = await fetch(
+          `https://api.json2video.com/v2/movies?project=${projectId}`,
+          { headers: { 'x-api-key': apiKey } }
+        );
+        pollData = await pollResponse.json();
+      } catch (pollError) {
+        console.warn(`[Render Node] Poll ${retries + 1}/36 — Network error during poll, will retry...`);
+        continue;
+      }
+
       const status = pollData.movie?.status;
       console.log(`[Render Node] Poll ${retries + 1}/36 — status: ${status}`);
 

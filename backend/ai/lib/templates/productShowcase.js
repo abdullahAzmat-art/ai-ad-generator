@@ -17,14 +17,21 @@ export function productShowcase(scene, imageUrl, brand) {
   // Ken Burns: subtle integer zoom (JSON2Video requires an integer)
   const zoomLevel = 2; // 2 = subtle slow zoom-in
 
-  // Determine slow drift direction per scene role for variety
-  const driftMap = {
-    hook:          { x0: 0,    y0: 0    },
-    'product-hero':{ x0: -20,  y0: 0    },
-    benefits:      { x0: 0,    y0: -20  },
-    offer:         { x0: 20,   y0: 0    },
+  // FIXED: this used to be a manual { x0, y0 } pixel offset applied on top
+  // of a `resize:"cover"` image. Since `resize` sizes the image against the
+  // FULL CANVAS regardless of width/height, that offset was shifting the
+  // already-canvas-sized image away from the frame — opening a gap on one
+  // edge and pushing the image off-frame on the other (the "gap, then half
+  // image" bug). `pan` is the property JSON2Video actually built for this:
+  // it moves within a resize'd image while it's zooming, without ever
+  // exposing an edge. `hook` gets none — just the zoom, no drift.
+  const panMap = {
+    hook: null,
+    'product-hero': 'left',
+    benefits: 'top',
+    offer: 'right',
   };
-  const drift = driftMap[scene.role] || { x0: 0, y0: 0 };
+  const pan = panMap[scene.role] || null;
 
   return {
     duration,
@@ -43,16 +50,15 @@ export function productShowcase(scene, imageUrl, brand) {
         duration,
       },
 
-      // 2. Full-frame product image — Ken Burns slow zoom + gentle drift
+      // 2. Full-frame product image — Ken Burns slow zoom + native pan.
+      // No manual x/y offset anymore — resize:"cover" owns the full-canvas
+      // sizing, and `pan` (not x/y) handles the drift, safely.
       {
         type: 'image',
         src: imageUrl,
-        x: 0 + drift.x0,
-        y: 0 + drift.y0,
-        width: 1080,
-        height: 1920,
-        resize: 'contain',          // keeps full bottle visible, gradient shows around it
+        resize: 'cover',            // Fills the entire screen, preventing empty space
         zoom: zoomLevel,            // integer required by JSON2Video
+        ...(pan ? { pan } : {}),
         start: 0,
         duration,
         'fade-in': 0.4,
