@@ -36,6 +36,9 @@ export async function scrapeNode(state) {
   const scraped = await scrapeUrl(state.url);
   
   const { title, description, pageText, images, logo, brandColor } = scraped;
+
+  console.log(`[Scrape Node] scraped.images = ${images.length} url(s), logo = ${logo ?? 'none'}`);
+  if (process.env.DEBUG_SCRAPE === '1') console.log('[Scrape Node] image urls:', images);
   
   // 2. Extract richer data via LLM
   let extracted = {};

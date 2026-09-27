@@ -1,14 +1,22 @@
+import { mergeSceneEdits } from '../lib/sceneEdits.js';
+
 export async function applyEditsNode(state) {
-  console.log('[Apply Edits Node] Applying user edits to the script...');
+  const { script, decision, editCount = 0 } = state;
 
-  const { decision, script } = state;
+  const { scenes, warnings, error } = mergeSceneEdits(script?.scenes, decision?.edits?.scenes);
 
-  if (decision && decision.edits) {
-    // Merge edits into the current script
-    // This assumes decision.edits is the modified script object or contains changes
-    const updatedScript = { ...script, ...decision.edits };
-    return { script: updatedScript, editCount: (state.editCount || 0) + 1 };
+  if (error) {
+    console.error('[Apply Edits Node] Rejected:', error);
+    return { error, editWarnings: [], editCount };
   }
 
-  return {};
+  warnings.forEach((warning) => console.warn('[Apply Edits Node]', warning));
+  console.log(`[Apply Edits Node] Applied copy edits to ${scenes.length} scenes.`);
+
+  return {
+    script: { ...script, scenes },
+    editWarnings: warnings,
+    error: null,
+    editCount: editCount + 1,
+  };
 }

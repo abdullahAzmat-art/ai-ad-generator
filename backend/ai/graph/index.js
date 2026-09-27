@@ -122,7 +122,7 @@
 //                │
 //                ▼
 //     ┌─────────────────────────────────┐
-//     │ [ ] HUMAN REVIEW                │
+//     │ [x] HUMAN REVIEW                │
 //     │                                 │
 //     │  ⏸ INTERRUPT / PAUSE            │
 //     │                                 │
@@ -135,19 +135,22 @@
 //           │                   │
 //           ▼                   │
 // ┌─────────────────────┐       │
-// │ [ ] APPLY EDITS     │       │
+// │ [x] APPLY EDITS     │       │
 // │                     │       │
-// │  Update scenes /    │       │
-// │  text / images      │       │
+// │  Merge edited scene │       │
+// │  copy onto script   │       │
 // └──────────┬──────────┘       │
 //            │                  │
-//            └──────► RENDER ◄──┘
-//                               │
-//                               ▼
+//      ┌─────┴──────┐           │
+//    REJECTED     VALID         │
+//      │            │           │
+//      │            └────► RENDER ◄─┘
+//      │                        │
+//      └──► HUMAN REVIEW        ▼
 //                ┌────────────────────────┐
-//                │ [ ] FINALIZE           │
+//                │ [x] FINALIZE           │
 //                │                        │
-//                │  Save final result     │
+//                │  Run summary logged    │
 //                │  • video URL           │
 //                │  • scenes              │
 //                │  • metadata            │
@@ -170,7 +173,7 @@ import { renderNode } from '../nodes/render.node.js';
 import { humanReviewNode } from '../nodes/humanReview.node.js';
 import { applyEditsNode } from '../nodes/applyEdits.node.js';
 import { finalizeNode } from '../nodes/finalize.node.js';
-import { routeImages, routeReview, routeHumanReview } from './routes.js';
+import { routeImages, routeReview, routeHumanReview, routeAfterEdits } from './routes.js';
 
 export const adGraph = new StateGraph(AdState)
   .addNode('scrape', scrapeNode)
@@ -211,7 +214,10 @@ export const adGraph = new StateGraph(AdState)
     finalize: 'finalize',
   })
   
-  .addEdge('apply_edits', 'render')
+  .addConditionalEdges('apply_edits', routeAfterEdits, {
+    human_review: 'human_review',
+    render: 'render',
+  })
   .addEdge('finalize', END)
   
   .compile({ checkpointer: new MemorySaver() });

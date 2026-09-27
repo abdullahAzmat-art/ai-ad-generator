@@ -1,3 +1,15 @@
+// ─── Scene copy is user-editable, so anything landing inside an `html` element
+// has to be escaped or the text can close its own tag and inject markup.
+// ────────────────────────────────────────────────────────────────────────────
+export function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ─── Voiceover ────────────────────────────────────────────────────────────────
 export function voiceover(text) {
   return {
@@ -23,7 +35,7 @@ export function brandBar(brand, duration) {
     .replace(/[^A-Z0-9]/g, '') || 'B');
 
   const logoHtml = brand.logo
-    ? `<img src="${brand.logo}" style="width:100%;height:100%;object-fit:contain;" />`
+    ? `<img src="${escapeHtml(brand.logo)}" style="width:100%;height:100%;object-fit:contain;" />`
     : `<span style="font-family:Montserrat,sans-serif;font-size:34px;font-weight:900;color:#FFF;line-height:1;">${initials}</span>`;
 
   const strip = {
@@ -33,8 +45,8 @@ export function brandBar(brand, duration) {
         ${logoHtml}
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center;">
-        <span style="font-family:Montserrat,sans-serif;font-size:64px;font-weight:900;color:#111827;letter-spacing:-1px;line-height:1.1;white-space:nowrap;">${brand.name || ''}</span>
-        ${brand.website ? `<span style="font-family:Montserrat,sans-serif;font-size:36px;font-weight:600;color:${brand.color};white-space:nowrap;">${brand.website}</span>` : ''}
+        <span style="font-family:Montserrat,sans-serif;font-size:64px;font-weight:900;color:#111827;letter-spacing:-1px;line-height:1.1;white-space:nowrap;">${escapeHtml(brand.name || '')}</span>
+        ${brand.website ? `<span style="font-family:Montserrat,sans-serif;font-size:36px;font-weight:600;color:${brand.color};white-space:nowrap;">${escapeHtml(brand.website)}</span>` : ''}
       </div>
     </div>`,
     x: 0,

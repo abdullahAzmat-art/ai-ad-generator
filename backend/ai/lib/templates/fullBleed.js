@@ -4,11 +4,12 @@
  * bottom-third, persistent brand pill + QR code on every frame.
  */
 
-import { brandBar, qrCode, voiceover } from './helpers.js';
+import { brandBar, qrCode, voiceover, escapeHtml } from './helpers.js';
 
 export function fullBleed(scene, imageUrl, brand = {}) {
   const dur = scene.durationSec || 4;
-  const sub = (scene.subtext || '').trim();
+  const headline = escapeHtml(scene.headline);
+  const sub = escapeHtml((scene.subtext || '').trim());
   const hasSub = sub.length > 0;
 
   return {
@@ -43,10 +44,10 @@ export function fullBleed(scene, imageUrl, brand = {}) {
       },
 
       // 3. Frosted caption block — bottom-third, only when content exists
-      ...(scene.headline ? [{
+      ...(headline ? [{
         type: 'html',
         html: `<div style="padding:20px 32px;max-width:700px;">
-          <p style="margin:0;font-family:Montserrat,sans-serif;font-size:38px;font-weight:700;color:#FFFFFF;text-shadow:0 2px 8px rgba(0,0,0,0.4);letter-spacing:-0.3px;line-height:1.2;">${scene.headline}</p>
+          <p style="margin:0;font-family:Montserrat,sans-serif;font-size:38px;font-weight:700;color:#FFFFFF;text-shadow:0 2px 8px rgba(0,0,0,0.4);letter-spacing:-0.3px;line-height:1.2;">${headline}</p>
           ${hasSub ? `<p style="margin:10px 0 0;font-family:Montserrat,sans-serif;font-size:26px;font-weight:400;color:rgba(255,255,255,0.88);text-shadow:0 1px 4px rgba(0,0,0,0.3);">${sub}</p>` : ''}
         </div>`,
         x: 60,

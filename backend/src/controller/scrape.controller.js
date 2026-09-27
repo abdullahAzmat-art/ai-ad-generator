@@ -24,6 +24,7 @@ export async function scrapeController(request, response) {
       stockImages: result.stockImages,
       script: result.script,
       videoUrl: result.videoUrl,
+      error: result.error ?? null,
     });
   } catch (error) {
     console.error('Scrape workflow failed:', error);

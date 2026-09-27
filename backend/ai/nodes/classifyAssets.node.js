@@ -26,6 +26,8 @@ export async function classifyAssetsNode(state) {
   
   const allImages = [...new Set([logoUrl, ...images].filter(Boolean))];
 
+  console.log(`[Classify Assets Node] ${images.length} scraped image(s) + logo ${logoUrl || 'null'} → ${allImages.length} unique URL(s) to classify.`);
+
   if (allImages.length === 0) {
     return {
       assets: {

@@ -20,6 +20,9 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { writeScrapeCache } from "../lib/scrapeCache";
+import { generateAd } from "../lib/api";
+import { downloadVideo } from "../lib/downloadVideo";
+import type { ScrapeData } from "../lib/adScenes";
 
 interface Stage {
   icon: LucideIcon;
@@ -72,12 +75,6 @@ const STAGE_MS_FAST = 340;
 
 type Phase = "working" | "done" | "error";
 
-interface ScrapeResult {
-  videoUrl?: string | null;
-  script?: { scenes?: unknown[] } | null;
-  error?: string;
-}
-
 export default function GenerateAdModal({ url, onClose }: { url: string; onClose: () => void }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("working");
@@ -86,7 +83,7 @@ export default function GenerateAdModal({ url, onClose }: { url: string; onClose
   const [elapsed, setElapsed] = useState(0);
   const [fetchDone, setFetchDone] = useState(false);
   const [runId, setRunId] = useState(0);
-  const [result, setResult] = useState<ScrapeResult | null>(null);
+  const [result, setResult] = useState<ScrapeData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   let domain = "your-brand.com";
@@ -102,15 +99,8 @@ export default function GenerateAdModal({ url, onClose }: { url: string; onClose
 
     (async () => {
       try {
-        const res = await fetch("http://localhost:4000/api/scrape", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url, aspectRatio: "9:16" }),
-          signal: ctrl.signal,
-        });
-        const data: ScrapeResult = await res.json();
+        const data = await generateAd(url, "9:16", ctrl.signal);
         if (cancelled) return;
-        if (!res.ok || data.error) throw new Error(data.error || "The generation pipeline failed. Please try again.");
         setResult(data);
         writeScrapeCache(url, data);
         setFetchDone(true);
@@ -187,7 +177,7 @@ export default function GenerateAdModal({ url, onClose }: { url: string; onClose
 
   const handleEdit = () => router.push(`/ads?url=${encodeURIComponent(url)}`);
   const handleDownload = () => {
-    if (videoUrl) window.open(videoUrl, "_blank");
+    if (videoUrl) void downloadVideo(videoUrl, `${domain}-ad.mp4`);
   };
 
   return (

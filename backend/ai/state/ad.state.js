@@ -48,4 +48,5 @@ export const AdState = Annotation.Root({
   // human_review / apply_edits
   decision: overwrite(null),        // { action: "approve" } | { action: "edit", edits }
   editCount: overwrite(0),
+  editWarnings: overwrite([]),      // advisory notes about applied copy
 });

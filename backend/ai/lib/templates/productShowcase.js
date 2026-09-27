@@ -7,12 +7,12 @@
  * branding (bottom-left pill + top-right QR) stays on every frame.
  */
 
-import { brandBar, qrCode, voiceover } from './helpers.js';
+import { brandBar, qrCode, voiceover, escapeHtml } from './helpers.js';
 
 export function productShowcase(scene, imageUrl, brand) {
   const duration = scene.durationSec || 4;
-  const headline = (scene.headline || '').trim();
-  const subtext  = (scene.subtext  || '').trim();
+  const headline = escapeHtml((scene.headline || '').trim());
+  const subtext  = escapeHtml((scene.subtext  || '').trim());
 
   // Ken Burns: subtle integer zoom (JSON2Video requires an integer)
   const zoomLevel = 2; // 2 = subtle slow zoom-in

@@ -16,3 +16,9 @@ export function routeHumanReview(state) {
   }
   return 'finalize';
 }
+
+// Rejected edits must not reach the render engine — hand the review back so
+// the user can fix the copy and try again on the same thread.
+export function routeAfterEdits(state) {
+  return state.error ? 'human_review' : 'render';
+}
