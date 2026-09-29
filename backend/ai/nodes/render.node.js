@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { createCanvas } from '../lib/canvas.js';
 
 async function resolveImageUrl(scene, assets, stockImages, sceneIndex) {
   const role = scene.assetRole;
@@ -50,12 +51,6 @@ async function resolveImageUrl(scene, assets, stockImages, sceneIndex) {
   return null;
 }
 
-const RESOLUTION_PRESETS = {
-  '9:16': 'instagram-story',
-  '16:9': 'full-hd',
-  '1:1': 'squared',
-};
-
 function normalizeBrandColor(color) {
   return typeof color === 'string' && /^#[0-9a-f]{3,8}$/i.test(color)
     ? color
@@ -83,21 +78,23 @@ function createBrand(scraped, assets, url, adType) {
   };
 }
 
-function pickTemplate(scene, imageUrl, brand, isFinalScene, isFirstScene, templates) {
+// Every template draws against `canvas`, which carries the pixel frame of the
+// chosen aspect ratio.
+function pickTemplate(scene, imageUrl, brand, isFinalScene, isFirstScene, templates, canvas) {
   // 1. PRODUCT ADS
   if (brand.adType === 'product') {
     return isFinalScene
-      ? templates['product-end-card'](scene, brand)
-      : templates['product-showcase'](scene, imageUrl, brand);
+      ? templates['product-end-card'](scene, brand, canvas)
+      : templates['product-showcase'](scene, imageUrl, brand, canvas);
   }
 
   // 2. SERVICE / BUSINESS ADS
   if (isFirstScene) {
-    return templates['service-intro'](scene, brand);
+    return templates['service-intro'](scene, brand, canvas);
   }
 
   if (isFinalScene) {
-    return templates['service-end-card'](scene, brand);
+    return templates['service-end-card'](scene, brand, canvas);
   }
 
   // Middle scenes for service ads: use full-bleed or split showing the work
@@ -109,12 +106,12 @@ function pickTemplate(scene, imageUrl, brand, isFinalScene, isFirstScene, templa
     case 'product-left':
     case 'product-right':
     case 'product-center':
-      return templates.split(scene, imageUrl, brand.color, brand);
+      return templates.split(scene, imageUrl, brand.color, brand, canvas);
     case 'full-bleed':
     case 'overlay':
     case 'top-text':
     default:
-      return templates['full-bleed'](scene, imageUrl, brand);
+      return templates['full-bleed'](scene, imageUrl, brand, canvas);
   }
 }
 
@@ -124,7 +121,7 @@ export async function renderNode(state) {
     scraped,
     assets = {},
     stockImages = [],
-    aspectRatio = '9:16',
+    aspectRatio = '16:9',
     adType = 'business',
     url,
   } = state;
@@ -151,7 +148,8 @@ export async function renderNode(state) {
   }
 
   const brand = createBrand(scraped, assets, url, adType);
-  console.log(`[Render Node] ${script.scenes.length} scenes, brand: ${brand.name}`);
+  const canvas = createCanvas(aspectRatio);
+  console.log(`[Render Node] ${script.scenes.length} scenes, brand: ${brand.name}, ${canvas.aspectRatio} (${canvas.resolution} ${canvas.w}x${canvas.h})`);
 
   const { TEMPLATES } = await import('../lib/templates/index.js');
   let scenes;
@@ -180,7 +178,7 @@ export async function renderNode(state) {
         `[Render Node] Scene ${index + 1} [${scene.role}] layout="${scene.layout}" assetRole="${scene.assetRole}"`
       );
 
-      return pickTemplate(scene, imageUrl, brand, isFinalScene, isFirstScene, TEMPLATES);
+      return pickTemplate(scene, imageUrl, brand, isFinalScene, isFirstScene, TEMPLATES, canvas);
     }));
   } catch (error) {
     console.error('[Render Node] Scene build failed:', error.message);
@@ -189,19 +187,25 @@ export async function renderNode(state) {
 
   const totalDuration = script.scenes.reduce((acc, scene) => acc + (scene.durationSec || 4), 0);
 
+  // Default: "The Cradle of Your Soul" — soft piano & strings, Pixabay (free for
+  // commercial use, no attribution). Override with BACKGROUND_MUSIC_URL in .env.
+  const musicUrl =
+    process.env.BACKGROUND_MUSIC_URL ||
+    'https://cdn.pixabay.com/audio/2022/08/02/audio_884fe92c21.mp3';
+
   const payload = {
-    resolution: RESOLUTION_PRESETS[aspectRatio] || 'instagram-story',
+    resolution: canvas.resolution,
     quality: 'high',
     draft: false,
     elements: [
       {
         type: 'audio',
-        src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', // Reliable background music for testing
-        volume: 0.15,
+        src: musicUrl,
+        volume: 0.18,
         start: 0,
         duration: totalDuration,
-        'fade-in': 1,
-        'fade-out': 2
+        'fade-in': 1.5,
+        'fade-out': 2.5
       }
     ],
     scenes,

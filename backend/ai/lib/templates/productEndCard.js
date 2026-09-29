@@ -1,29 +1,38 @@
 /**
  * Premium Minimal Product End Card
  *
- * Perfectly centered composition on a soft gradient:
+ * Centered composition on a soft gradient:
  *   • Logo mark (top of center cluster)
  *   • Bold brand name
  *   • CTA line (phone / WhatsApp / website)
- *   • Website URL (gold accent)
- * Persistent top-right QR code + bottom-left brand pill from helpers.
+ *   • Website URL (brand accent)
+ * The cluster is measured on the story frame and centred on whatever canvas
+ * this renders to, so it stays a single balanced block at 1:1 and 16:9 too.
+ * Persistent top-right QR code + bottom brand strip from helpers.
  *
- * FIXED: the logo image had `resize:"contain"` together with explicit
- * `width:400, height:220`. Per JSON2Video's docs, setting `resize` makes
- * width/height IGNORED — so that 400x220 box was never actually applied.
- * Removed `resize` so the width/height you already specified finally does
- * what you intended.
+ * The logo sits in an object-fit:contain box, so any logo shape — square,
+ * wide, tall — lands uncut and undistorted at every aspect ratio.
  */
 
-import { brandBar, qrCode, voiceover } from './helpers.js';
+import { createCanvas } from '../canvas.js';
+import { brandBar, qrCode, voiceover, fittedImage } from './helpers.js';
 
-export function productEndCard(scene, brand) {
+// Vertical rhythm of the cluster, measured on the 1080x1920 story frame.
+const CLUSTER = {
+  withLogo: { height: 633, name: 250, cta: 380, contact: 490, rule: 590 },
+  textOnly: { height: 383, name: 0, cta: 130, contact: 240, rule: 340 },
+};
+
+export function productEndCard(scene, brand, canvas = createCanvas()) {
   const duration = scene.durationSec || 4;
   const contact  = brand.contact || brand.website || '';
   const cta      = scene.cta || 'Order Now';
 
-  // Vertically center a cluster of ~560px height in a 1920px canvas → top ~680
-  const clusterTop = 680;
+  const shape = brand.logo ? CLUSTER.withLogo : CLUSTER.textOnly;
+  const px = canvas.px;
+  const clusterTop = canvas.middle(px(shape.height)) + px(40);
+  const nameRow = canvas.row(920);
+  const ruleX = canvas.mid(px(80));
 
   return {
     duration,
@@ -33,56 +42,51 @@ export function productEndCard(scene, brand) {
       // 1. Soft gradient background — same language as showcase scenes
       {
         type: 'html',
-        html: '<div style="width:1080px;height:1920px;background:linear-gradient(160deg,#FFFFFF 0%,#F3F4F6 55%,#E8E9EC 100%);"></div>',
+        html: `<div style="width:${canvas.w}px;height:${canvas.h}px;background:linear-gradient(160deg,#FFFFFF 0%,#F3F4F6 55%,#E8E9EC 100%);"></div>`,
         x: 0,
         y: 0,
-        width: 1080,
-        height: 1920,
+        width: canvas.w,
+        height: canvas.h,
         start: 0,
         duration,
       },
 
-      // 2. Thin gold accent line — centered, above the cluster
+      // 2. Thin accent line — centered, above the cluster
       {
         type: 'html',
-        html: `<div style="width:80px;height:3px;background:${brand.color};border-radius:2px;"></div>`,
-        x: 500,
-        y: clusterTop - 40,
-        width: 80,
-        height: 3,
+        html: `<div style="width:${px(80)}px;height:${px(3)}px;background:${brand.color};border-radius:2px;"></div>`,
+        x: ruleX,
+        y: clusterTop - px(40),
+        width: px(80),
+        height: px(3),
         start: 0.1,
         duration,
         'fade-in': 0.4,
       },
 
-      // 3. Logo mark — centered at the top of the cluster. No `resize`, so
-      // the 400x220 box actually applies now instead of being ignored.
-      ...(brand.logo ? [{
-        type: 'image',
-        src: brand.logo,
-        x: 340,
+      // 3. Logo mark — centred at the top of the cluster, contain-fitted so
+      // any logo shape shows whole.
+      ...(brand.logo ? [fittedImage(brand.logo, {
+        x: canvas.mid(px(400)),
         y: clusterTop,
-        width: 400,
-        height: 220,
-        start: 0,
-        duration,
-        'fade-in': 0.4,
-      }] : []),
+        width: px(400),
+        height: px(220),
+      }, { duration, fadeIn: 0.4 })] : []),
 
       // 4. Brand name — bold, centered
       {
         type: 'text',
         text: brand.name || '',
-        x: 80,
-        y: brand.logo ? clusterTop + 250 : clusterTop,
-        width: 920,
-        height: 100,
+        x: nameRow.x,
+        y: clusterTop + px(shape.name),
+        width: nameRow.width,
+        height: px(100),
         start: 0.2,
         duration: Math.max(0, duration - 0.2),
         settings: {
           'font-family': 'Montserrat',
           color: '#111827',
-          'font-size': '60px',
+          'font-size': `${px(60)}px`,
           'font-weight': '800',
           'text-align': 'center',
           'letter-spacing': '-1px',
@@ -94,36 +98,36 @@ export function productEndCard(scene, brand) {
       {
         type: 'text',
         text: cta,
-        x: 80,
-        y: brand.logo ? clusterTop + 380 : clusterTop + 130,
-        width: 920,
-        height: 80,
+        x: nameRow.x,
+        y: clusterTop + px(shape.cta),
+        width: nameRow.width,
+        height: px(80),
         start: 0.35,
         duration: Math.max(0, duration - 0.35),
         settings: {
           'font-family': 'Montserrat',
           color: '#374151',
-          'font-size': '38px',
+          'font-size': `${px(38)}px`,
           'font-weight': '500',
           'text-align': 'center',
         },
         'fade-in': 0.35,
       },
 
-      // 6. Contact / website — gold accent
+      // 6. Contact / website — brand accent
       ...(contact ? [{
         type: 'text',
         text: contact,
-        x: 80,
-        y: brand.logo ? clusterTop + 490 : clusterTop + 240,
-        width: 920,
-        height: 70,
+        x: nameRow.x,
+        y: clusterTop + px(shape.contact),
+        width: nameRow.width,
+        height: px(70),
         start: 0.5,
         duration: Math.max(0, duration - 0.5),
         settings: {
           'font-family': 'Montserrat',
           color: brand.color,
-          'font-size': '36px',
+          'font-size': `${px(36)}px`,
           'font-weight': '700',
           'text-align': 'center',
         },
@@ -133,21 +137,21 @@ export function productEndCard(scene, brand) {
       // 7. Thin bottom accent line
       {
         type: 'html',
-        html: `<div style="width:80px;height:3px;background:${brand.color};border-radius:2px;"></div>`,
-        x: 500,
-        y: brand.logo ? clusterTop + 590 : clusterTop + 340,
-        width: 80,
-        height: 3,
+        html: `<div style="width:${px(80)}px;height:${px(3)}px;background:${brand.color};border-radius:2px;"></div>`,
+        x: ruleX,
+        y: clusterTop + px(shape.rule),
+        width: px(80),
+        height: px(3),
         start: 0.55,
         duration: Math.max(0, duration - 0.55),
         'fade-in': 0.4,
       },
 
-      // 8. Persistent bottom-left brand pill
-      ...brandBar(brand, duration),
+      // 8. Persistent bottom brand strip
+      ...brandBar(brand, duration, canvas),
 
       // 9. Persistent top-right QR code
-      ...qrCode(brand, duration),
+      ...qrCode(brand, duration, canvas),
 
       // 10. Voiceover
       voiceover(scene.voiceover),

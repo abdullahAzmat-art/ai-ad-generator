@@ -1,4 +1,5 @@
 import { adGraph } from '../../ai/graph/index.js';
+import { isNetworkError, networkErrorMessage } from '../lib/errorMessage.js';
 import crypto from 'crypto';
 
 export async function scrapeController(request, response) {
@@ -17,17 +18,28 @@ export async function scrapeController(request, response) {
     
     // The graph will now interrupt at human_review, so we return the partial state
     // as well as the thread_id so the frontend can resume it later.
+    // A network-shaped graph error (e.g. Firecrawl unreachable) still comes back
+    // friendly — the raw message goes to `errorDetail` for debugging.
+    const graphError = result.error ?? null;
     return response.json({
       thread_id,
       scraped: result.scraped,
       assets: result.assets,
       stockImages: result.stockImages,
       script: result.script,
+      aspectRatio: result.aspectRatio,
       videoUrl: result.videoUrl,
-      error: result.error ?? null,
+      error: graphError && isNetworkError(graphError) ? networkErrorMessage() : graphError,
+      errorDetail: graphError ?? undefined,
     });
   } catch (error) {
     console.error('Scrape workflow failed:', error);
+    if (isNetworkError(error)) {
+      return response.status(502).json({
+        error: networkErrorMessage(),
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
     const message = error instanceof Error ? error.message : 'Unable to scrape the requested URL.';
     const status = message.includes('valid http(s) URL') ? 400 : 502;
     return response.status(status).json({ error: message });

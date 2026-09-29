@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getLlmClient, hasLlmProvider, GROQ_STRONG_MODEL } from '../lib/llm.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { mockScript } from '../lib/mockData.js';
+import { toFormat } from '../lib/canvas.js';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -53,12 +54,6 @@ const ScriptSchema = z.object({
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function toFormat(aspectRatio) {
-  if (aspectRatio === '16:9') return 'banner';
-  if (aspectRatio === '1:1') return 'square';
-  return 'story';
-}
 
 function buildPrompt(state, feedback, previousScript) {
   const {

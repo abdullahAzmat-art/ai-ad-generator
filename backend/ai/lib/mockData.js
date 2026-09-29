@@ -3,6 +3,8 @@
 // run without Firecrawl, LLM, or Pexels spend. Every scene here satisfies
 // reviewNode's rules so a mock run always reaches render.
 
+import { toFormat } from './canvas.js';
+
 const BRAND = {
   name: 'Aurelle',
   tagline: 'Wear the moment',
@@ -14,12 +16,6 @@ const LOGO_URL = 'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w
 const PRODUCT_HERO_URL = 'https://images.unsplash.com/photo-1594035910387-fea47794261f?w=800&q=80'; // Beautiful perfume bottle
 const PRODUCT_ALT_URL = 'https://images.unsplash.com/photo-1588405748880-12d1d2a59f75?w=800&q=80'; // Alternate perfume bottle
 const PRODUCT_BACK_URL = 'https://images.unsplash.com/photo-1595425970377-c9703c486578?w=800&q=80'; // Third perfume bottle
-
-function toFormat(aspectRatio) {
-  if (aspectRatio === '16:9') return 'banner';
-  if (aspectRatio === '1:1') return 'square';
-  return 'story';
-}
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 

@@ -1,6 +1,29 @@
-import { voiceover } from './helpers.js';
+import { createCanvas } from '../canvas.js';
+import { voiceover, fittedImage } from './helpers.js';
 
-export function serviceEndCard(scene, brand) {
+// Distances from the top of the closing composition, measured on the
+// 1080x1920 story frame. The cluster hangs from its bottom margin, so a square
+// or landscape canvas gets the same card with tighter air around it.
+const ROW = {
+  logo: 0,
+  name: 310,
+  rule: 395,
+  headline: 460,
+  button: 640,
+  card: 680,
+  phone: 785,
+  website: 905,
+  divider: 1020,
+  trust: 1070,
+  brand: 1330,
+  footer: 1400,
+};
+const LOGO_TO_FOOTER_BOTTOM = 1450;
+const BOTTOM_MARGIN = 140;
+const CARD_HEIGHT = 570;
+const SIDE_INSET = 55;
+
+export function serviceEndCard(scene, brand, canvas = createCanvas()) {
   const duration = scene.durationSec || 4;
 
   const phone = (brand.contact || '').trim();
@@ -8,6 +31,12 @@ export function serviceEndCard(scene, brand) {
   const brandName = (brand.name || '').trim();
 
   const brandColor = brand.color || '#2563EB';
+
+  const px = canvas.px;
+  const row = (designWidth) => canvas.row(designWidth);
+  const clusterTop = canvas.h - px(BOTTOM_MARGIN) - px(LOGO_TO_FOOTER_BOTTOM);
+  const cardTop = clusterTop + px(ROW.card);
+  const cardInset = px(SIDE_INSET);
 
   const elements = [
     // =========================================================
@@ -17,8 +46,8 @@ export function serviceEndCard(scene, brand) {
       type: 'html',
       html: `
         <div style="
-          width:1080px;
-          height:1920px;
+          width:${canvas.w}px;
+          height:${canvas.h}px;
           position:relative;
           overflow:hidden;
           background:#F8FAFC;
@@ -27,10 +56,10 @@ export function serviceEndCard(scene, brand) {
           <!-- Large soft blue glow -->
           <div style="
             position:absolute;
-            width:850px;
-            height:850px;
-            right:-420px;
-            top:-280px;
+            width:${px(850)}px;
+            height:${px(850)}px;
+            right:-${px(420)}px;
+            top:-${px(280)}px;
             border-radius:50%;
             background:${brandColor};
             opacity:0.07;
@@ -39,10 +68,10 @@ export function serviceEndCard(scene, brand) {
           <!-- Navy decorative circle -->
           <div style="
             position:absolute;
-            width:500px;
-            height:500px;
-            right:-250px;
-            top:80px;
+            width:${px(500)}px;
+            height:${px(500)}px;
+            right:-${px(250)}px;
+            top:${px(80)}px;
             border-radius:50%;
             background:#0F172A;
           "></div>
@@ -50,10 +79,10 @@ export function serviceEndCard(scene, brand) {
           <!-- Small accent circle -->
           <div style="
             position:absolute;
-            width:160px;
-            height:160px;
-            left:-80px;
-            top:780px;
+            width:${px(160)}px;
+            height:${px(160)}px;
+            left:-${px(80)}px;
+            top:${px(780)}px;
             border-radius:50%;
             background:${brandColor};
             opacity:0.08;
@@ -62,22 +91,22 @@ export function serviceEndCard(scene, brand) {
           <!-- Main information card -->
           <div style="
             position:absolute;
-            left:55px;
-            right:55px;
-            top:1010px;
-            height:570px;
-            border-radius:42px;
+            left:${cardInset}px;
+            right:${cardInset}px;
+            top:${cardTop}px;
+            height:${px(CARD_HEIGHT)}px;
+            border-radius:${px(42)}px;
             background:#FFFFFF;
             border:1px solid rgba(15,23,42,0.06);
-            box-shadow:0 25px 70px rgba(15,23,42,0.09);
+            box-shadow:0 ${px(25)}px ${px(70)}px rgba(15,23,42,0.09);
           "></div>
 
         </div>
       `,
       x: 0,
       y: 0,
-      width: 1080,
-      height: 1920,
+      width: canvas.w,
+      height: canvas.h,
       start: 0,
       duration,
     },
@@ -91,18 +120,12 @@ export function serviceEndCard(scene, brand) {
   // =========================================================
 
   if (brand.logo) {
-    elements.push({
-      type: 'image',
-      src: brand.logo,
-      x: 315,
-      y: 330,
-      width: 450,
-      height: 260,
-      resize: 'contain',
-      start: 0,
-      duration,
-      'fade-in': 0.45,
-    });
+    elements.push(fittedImage(brand.logo, {
+      x: canvas.mid(px(450)),
+      y: clusterTop + px(ROW.logo),
+      width: px(450),
+      height: px(260),
+    }, { duration, fadeIn: 0.45 }));
   }
 
   // =========================================================
@@ -110,19 +133,20 @@ export function serviceEndCard(scene, brand) {
   // =========================================================
 
   if (brandName) {
+    const nameRow = row(880);
     elements.push({
       type: 'text',
       text: brandName.toUpperCase(),
-      x: 100,
-      y: 640,
-      width: 880,
-      height: 60,
+      x: nameRow.x,
+      y: clusterTop + px(ROW.name),
+      width: nameRow.width,
+      height: px(60),
       start: 0.15,
       duration: Math.max(0, duration - 0.15),
       settings: {
         'font-family': 'Montserrat',
         color: '#64748B',
-        'font-size': '22px',
+        'font-size': `${px(22)}px`,
         'font-weight': '700',
         'text-align': 'center',
         'letter-spacing': '2px',
@@ -139,16 +163,16 @@ export function serviceEndCard(scene, brand) {
     type: 'html',
     html: `
       <div style="
-        width:90px;
-        height:7px;
+        width:${px(90)}px;
+        height:${px(7)}px;
         border-radius:20px;
         background:${brandColor};
       "></div>
     `,
-    x: 495,
-    y: 725,
-    width: 90,
-    height: 7,
+    x: canvas.mid(px(90)),
+    y: clusterTop + px(ROW.rule),
+    width: px(90),
+    height: px(7),
     start: 0.2,
     duration: Math.max(0, duration - 0.2),
     'fade-in': 0.3,
@@ -158,19 +182,20 @@ export function serviceEndCard(scene, brand) {
   // CTA HEADLINE
   // =========================================================
 
+  const headlineRow = row(940);
   elements.push({
     type: 'text',
     text: 'READY TO GET STARTED?',
-    x: 70,
-    y: 790,
-    width: 940,
-    height: 120,
+    x: headlineRow.x,
+    y: clusterTop + px(ROW.headline),
+    width: headlineRow.width,
+    height: px(120),
     start: 0.3,
     duration: Math.max(0, duration - 0.3),
     settings: {
       'font-family': 'Montserrat',
       color: '#0F172A',
-      'font-size': '58px',
+      'font-size': `${px(58)}px`,
       'font-weight': '900',
       'text-align': 'center',
       'letter-spacing': '-1.2px',
@@ -186,19 +211,19 @@ export function serviceEndCard(scene, brand) {
     type: 'html',
     html: `
       <div style="
-        width:430px;
-        height:100px;
-        border-radius:25px;
+        width:${px(430)}px;
+        height:${px(100)}px;
+        border-radius:${px(25)}px;
         background:${brandColor};
         display:flex;
         align-items:center;
         justify-content:center;
-        box-shadow:0 18px 42px ${brandColor}30;
+        box-shadow:0 ${px(18)}px ${px(42)}px ${brandColor}30;
       ">
         <span style="
           color:#FFFFFF;
           font-family:Montserrat,sans-serif;
-          font-size:30px;
+          font-size:${px(30)}px;
           font-weight:900;
           letter-spacing:0.4px;
         ">
@@ -206,10 +231,10 @@ export function serviceEndCard(scene, brand) {
         </span>
       </div>
     `,
-    x: 325,
-    y: 970,
-    width: 430,
-    height: 100,
+    x: canvas.mid(px(430)),
+    y: clusterTop + px(ROW.button),
+    width: px(430),
+    height: px(100),
     start: 0.45,
     duration: Math.max(0, duration - 0.45),
     'fade-in': 0.4,
@@ -220,19 +245,20 @@ export function serviceEndCard(scene, brand) {
   // =========================================================
 
   if (phone) {
+    const phoneRow = row(880);
     elements.push({
       type: 'text',
       text: phone,
-      x: 100,
-      y: 1115,
-      width: 880,
-      height: 90,
+      x: phoneRow.x,
+      y: clusterTop + px(ROW.phone),
+      width: phoneRow.width,
+      height: px(90),
       start: 0.6,
       duration: Math.max(0, duration - 0.6),
       settings: {
         'font-family': 'Montserrat',
         color: '#0F172A',
-        'font-size': '48px',
+        'font-size': `${px(48)}px`,
         'font-weight': '800',
         'text-align': 'center',
         'letter-spacing': '-0.5px',
@@ -246,19 +272,20 @@ export function serviceEndCard(scene, brand) {
   // =========================================================
 
   if (website) {
+    const websiteRow = row(880);
     elements.push({
       type: 'text',
       text: website,
-      x: 100,
-      y: 1235,
-      width: 880,
-      height: 70,
+      x: websiteRow.x,
+      y: clusterTop + px(ROW.website),
+      width: websiteRow.width,
+      height: px(70),
       start: 0.75,
       duration: Math.max(0, duration - 0.75),
       settings: {
         'font-family': 'Montserrat',
         color: brandColor,
-        'font-size': '34px',
+        'font-size': `${px(34)}px`,
         'font-weight': '700',
         'text-align': 'center',
       },
@@ -274,14 +301,14 @@ export function serviceEndCard(scene, brand) {
     type: 'html',
     html: `
       <div style="
-        width:620px;
+        width:${px(620)}px;
         height:1px;
         background:#E2E8F0;
       "></div>
     `,
-    x: 230,
-    y: 1350,
-    width: 620,
+    x: canvas.mid(px(620)),
+    y: clusterTop + px(ROW.divider),
+    width: px(620),
     height: 1,
     start: 0.85,
     duration: Math.max(0, duration - 0.85),
@@ -292,19 +319,20 @@ export function serviceEndCard(scene, brand) {
   // TRUST TEXT
   // =========================================================
 
+  const trustRow = row(880);
   elements.push({
     type: 'text',
     text: 'PROFESSIONAL • TRUSTED • RELIABLE',
-    x: 100,
-    y: 1400,
-    width: 880,
-    height: 50,
+    x: trustRow.x,
+    y: clusterTop + px(ROW.trust),
+    width: trustRow.width,
+    height: px(50),
     start: 0.9,
     duration: Math.max(0, duration - 0.9),
     settings: {
       'font-family': 'Montserrat',
       color: '#64748B',
-      'font-size': '19px',
+      'font-size': `${px(19)}px`,
       'font-weight': '700',
       'text-align': 'center',
       'letter-spacing': '1.4px',
@@ -319,18 +347,12 @@ export function serviceEndCard(scene, brand) {
   // If your brand object contains a QR image, this will display it.
   //
   if (brand.qrCode) {
-    elements.push({
-      type: 'image',
-      src: brand.qrCode,
-      x: 870,
-      y: 90,
-      width: 130,
-      height: 130,
-      resize: 'contain',
-      start: 0.4,
-      duration: Math.max(0, duration - 0.4),
-      'fade-in': 0.35,
-    });
+    elements.push(fittedImage(brand.qrCode, {
+      x: canvas.w - px(130) - px(80),
+      y: px(90),
+      width: px(130),
+      height: px(130),
+    }, { start: 0.4, duration: Math.max(0, duration - 0.4), fadeIn: 0.35 }));
   }
 
   // =========================================================
@@ -338,19 +360,20 @@ export function serviceEndCard(scene, brand) {
   // =========================================================
 
   if (brandName) {
+    const footerRow = row(880);
     elements.push({
       type: 'text',
       text: brandName,
-      x: 100,
-      y: 1660,
-      width: 880,
-      height: 70,
+      x: footerRow.x,
+      y: clusterTop + px(ROW.brand),
+      width: footerRow.width,
+      height: px(70),
       start: 1,
       duration: Math.max(0, duration - 1),
       settings: {
         'font-family': 'Montserrat',
         color: '#0F172A',
-        'font-size': '30px',
+        'font-size': `${px(30)}px`,
         'font-weight': '800',
         'text-align': 'center',
       },
@@ -362,19 +385,20 @@ export function serviceEndCard(scene, brand) {
   // FINAL FOOTER
   // =========================================================
 
+  const closingRow = row(880);
   elements.push({
     type: 'text',
     text: 'YOUR BUSINESS. YOUR NEXT CUSTOMER.',
-    x: 100,
-    y: 1730,
-    width: 880,
-    height: 50,
+    x: closingRow.x,
+    y: clusterTop + px(ROW.footer),
+    width: closingRow.width,
+    height: px(50),
     start: 1.05,
     duration: Math.max(0, duration - 1.05),
     settings: {
       'font-family': 'Montserrat',
       color: '#94A3B8',
-      'font-size': '18px',
+      'font-size': `${px(18)}px`,
       'font-weight': '600',
       'text-align': 'center',
       'letter-spacing': '1.2px',

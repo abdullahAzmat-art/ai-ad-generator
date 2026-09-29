@@ -29,6 +29,7 @@ export async function resumeController(request, response) {
     return response.json({
       success: !result.error,
       script: result.script,
+      aspectRatio: result.aspectRatio,
       videoUrl: result.videoUrl,
       editWarnings: result.editWarnings ?? [],
       error: result.error ?? null,

@@ -13,14 +13,12 @@ import {
   LoaderCircle,
   Palette,
   ShieldCheck,
-  Sparkles,
   TriangleAlert,
   Wand2,
-  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { writeScrapeCache } from "../lib/scrapeCache";
-import { generateAd } from "../lib/api";
+import { generateAdOnce } from "../lib/api";
 import { downloadVideo } from "../lib/downloadVideo";
 import type { ScrapeData } from "../lib/adScenes";
 
@@ -94,18 +92,17 @@ export default function GenerateAdModal({ url, onClose }: { url: string; onClose
   }
 
   useEffect(() => {
-    const ctrl = new AbortController();
     let cancelled = false;
 
     (async () => {
       try {
-        const data = await generateAd(url, "9:16", ctrl.signal);
+        const data = await generateAdOnce(url, "9:16");
         if (cancelled) return;
         setResult(data);
         writeScrapeCache(url, data);
         setFetchDone(true);
       } catch (e) {
-        if (cancelled || (e instanceof DOMException && e.name === "AbortError")) return;
+        if (cancelled) return;
         setError(e instanceof Error ? e.message : "The generation pipeline failed. Please try again.");
         setPhase("error");
       }
@@ -113,7 +110,6 @@ export default function GenerateAdModal({ url, onClose }: { url: string; onClose
 
     return () => {
       cancelled = true;
-      ctrl.abort();
     };
   }, [runId, url]);
 

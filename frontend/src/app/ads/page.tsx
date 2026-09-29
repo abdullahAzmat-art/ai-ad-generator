@@ -13,9 +13,20 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { readScrapeCache, writeScrapeCache } from "../../lib/scrapeCache";
-import { applySceneEdits, generateAd } from "../../lib/api";
-import { mapScenes, withAppliedRun, type SceneCard, type ScrapeData } from "../../lib/adScenes";
+import { applySceneEdits, generateAdOnce } from "../../lib/api";
+import {
+  currentRatio,
+  DEFAULT_ASPECT_RATIO,
+  getBrand,
+  mapScenes,
+  ratioOption,
+  withAppliedRun,
+  type AspectRatio,
+  type SceneCard,
+  type ScrapeData,
+} from "../../lib/adScenes";
 import { downloadVideo } from "../../lib/downloadVideo";
+import AspectRatioPicker from "../../components/ads/AspectRatioPicker";
 import SceneEditorCard from "../../components/ads/SceneEditorCard";
 
 // ─── Loading / empty states ───────────────────────────────────────────────────
@@ -46,6 +57,7 @@ function AdsContent() {
 
   const [run, setRun] = useState<ScrapeData | null>(null);
   const [scenes, setScenes] = useState<SceneCard[]>([]);
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>(DEFAULT_ASPECT_RATIO);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,7 +96,7 @@ function AdsContent() {
         }
 
         // Nothing cached means the pipeline has to run for this URL.
-        const data = await generateAd(rawUrl);
+        const data = await generateAdOnce(rawUrl);
         if (!isMounted) return;
         writeScrapeCache(rawUrl, data);
         applyRun(data);
@@ -109,13 +121,20 @@ function AdsContent() {
     setNotices([]);
   };
 
+  // Picking a frame size only queues it; the video changes on Apply Changes.
+  const changeRatio = (value: AspectRatio) => {
+    setAspectRatio(value);
+    setApplied(false);
+    setNotices([]);
+  };
+
   const handleApplyChanges = async () => {
     if (!threadId || !run) return;
     setApplying(true);
     setActionError(null);
     setNotices([]);
     try {
-      const resumed = await applySceneEdits(threadId, scenes);
+      const resumed = await applySceneEdits(threadId, scenes, aspectRatio);
       const updatedRun = withAppliedRun(run, resumed);
       setRun(updatedRun);
       writeScrapeCache(rawUrl, updatedRun);
@@ -174,6 +193,10 @@ function AdsContent() {
   }
 
   const totalDuration = scenes.reduce((sum, scene) => sum + scene.durationSec, 0);
+  const brand = getBrand(run ?? {}, domain);
+  // Ratio of the video that exists right now, versus the one about to be rendered.
+  const renderedRatio = currentRatio(run);
+  const ratioChanged = aspectRatio !== renderedRatio;
 
   return (
     <div className="h-screen flex flex-col bg-[#f5f7fb] overflow-hidden">
@@ -221,7 +244,7 @@ function AdsContent() {
                 <h2 className="text-[#0a1945] font-black text-lg">Scene Editor</h2>
               </div>
               <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 rounded-full px-2.5 py-0.5">
-                {scenes.length} scenes · Edit each scene below
+                {scenes.length} scenes · {aspectRatio} frame
               </span>
             </div>
 
@@ -251,12 +274,14 @@ function AdsContent() {
               </ul>
             )}
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <div className="flex flex-col gap-5">
               {scenes.map((scene, i) => (
                 <SceneEditorCard
                   key={scene.id}
                   scene={scene}
+                  brand={brand}
                   isLast={i === scenes.length - 1}
+                  aspectRatio={aspectRatio}
                   onChange={(patch) => updateScene(i, patch)}
                 />
               ))}
@@ -272,26 +297,33 @@ function AdsContent() {
           <aside className="hidden lg:flex flex-col w-[320px] xl:w-[380px] shrink-0 border-l border-slate-200 bg-white p-6 gap-5 overflow-y-auto">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-black text-[#0a1945]">Generated Video</h3>
-              <span className="text-[11px] font-semibold text-slate-400 ml-auto">{totalDuration}s</span>
+              <span className="text-[11px] font-semibold text-slate-400 ml-auto">
+                {renderedRatio} · {totalDuration}s
+              </span>
             </div>
-            <div className="relative rounded-2xl overflow-hidden border-[4px] border-slate-800 shadow-xl bg-black aspect-[9/16] w-full">
+            <div className={`relative rounded-2xl overflow-hidden border-[4px] border-slate-800 shadow-xl bg-black ${ratioOption(renderedRatio).frameClass} w-full`}>
               {/* The rendered MP4 is streamed from the video CDN, not this origin. */}
-              <video src={videoUrl} controls autoPlay loop playsInline className="w-full h-full object-cover" />
+              <video src={videoUrl} controls autoPlay loop playsInline className="w-full h-full object-contain" />
             </div>
+            {ratioChanged && (
+              <p className="text-[11px] font-semibold text-slate-400">
+                Applying your changes re-renders this ad at {aspectRatio}.
+              </p>
+            )}
           </aside>
         )}
       </div>
 
       {/* ── Sticky action bar ── */}
       <div className="shrink-0 bg-white border-t border-slate-200 shadow-[0_-4px_24px_rgba(10,25,70,0.08)] px-5 py-4 z-20">
-        <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <p className="flex-1 text-xs font-semibold hidden sm:block text-slate-400">
-            {applying
-              ? "Re-rendering the video with your copy — this takes about a minute."
-              : applied
-                ? "Changes applied. The preview and download now carry your updated video."
-                : "Edit scene copy above, then apply changes to re-render the video."}
-          </p>
+        <div className="max-w-4xl mx-auto flex flex-wrap items-center gap-3">
+         
+
+          <AspectRatioPicker
+            value={aspectRatio}
+            renderedRatio={renderedRatio}
+            onChange={changeRatio}
+          />
 
           <button
             onClick={handleApplyChanges}
@@ -306,7 +338,15 @@ function AdsContent() {
             ) : (
               <Sparkles className="w-4 h-4" />
             )}
-            <span>{applying ? "Re-rendering…" : applied ? "Applied!" : "Apply Changes"}</span>
+            <span>
+              {applying
+                ? "Re-rendering…"
+                : applied
+                  ? "Applied!"
+                  : ratioChanged
+                    ? `Apply & Re-render ${aspectRatio}`
+                    : "Apply Changes"}
+            </span>
           </button>
 
           {videoUrl && (

@@ -9,11 +9,23 @@ import {
   Mic,
   Sparkles,
 } from "lucide-react";
-import { copyWarnings, getRoleStyle, type SceneCard } from "../../lib/adScenes";
+import {
+  brandInitials,
+  copyWarnings,
+  getRoleStyle,
+  ratioOption,
+  type AdBrand,
+  type AspectRatio,
+  type RatioOption,
+  type SceneCard,
+} from "../../lib/adScenes";
 
 interface Props {
   scene: SceneCard;
+  brand: AdBrand;
   isLast: boolean;
+  /** Frame the next render will use; the preview is drawn to match it. */
+  aspectRatio: AspectRatio;
   onChange: (patch: Partial<SceneCard>) => void;
 }
 
@@ -67,7 +79,96 @@ function Field({
   );
 }
 
-export default function SceneEditorCard({ scene, isLast, onChange }: Props) {
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">{children}</p>
+  );
+}
+
+/**
+ * The scene as the renderer composes it, drawn at the shape it will be
+ * rendered in: full visual, caption text under it, then the brand strip that
+ * stays on every frame.
+ */
+function SceneFrame({ scene, brand, ratio }: { scene: SceneCard; brand: AdBrand; ratio: RatioOption }) {
+  return (
+    <div
+      className={`${ratio.widthClass} ${ratio.frameClass} w-full mx-auto flex flex-col rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-[0_6px_20px_rgba(10,25,70,0.10)]`}
+    >
+      {/* 1. Visual */}
+      {scene.hasVisual ? (
+        scene.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={scene.imageUrl}
+            alt={`Visual of scene ${scene.sceneNumber}`}
+            className="flex-1 min-h-0 w-full object-cover"
+          />
+        ) : (
+          <div className="flex-1 min-h-0 w-full flex flex-col items-center justify-center gap-1.5 border-b border-dashed border-slate-200 bg-slate-50 text-slate-400">
+            <ImageOff className="w-5 h-5" />
+            <span className="text-[11px] font-semibold">Visual sourced at render</span>
+          </div>
+        )
+      ) : (
+        <div
+          className="flex-1 min-h-0 w-full flex items-center justify-center px-4 text-center"
+          style={{ background: `linear-gradient(160deg,#FFFFFF 0%,${brand.color}26 100%)` }}
+        >
+          <span className="text-2xl font-black tracking-tight text-[#0a1945] leading-none">
+            {brand.name}
+          </span>
+        </div>
+      )}
+
+      {/* 2. On-screen text */}
+      <div className="shrink-0 min-h-[62px] px-3 py-2.5 flex flex-col items-center justify-center text-center bg-white">
+        <p className="text-[15px] font-extrabold leading-tight text-[#111827] tracking-tight">
+          {scene.headline || "Headline appears here"}
+        </p>
+        {scene.subtext && (
+          <p className="mt-1 text-[11px] font-medium leading-snug text-slate-500">{scene.subtext}</p>
+        )}
+        {scene.cta && (
+          <span
+            className="mt-2 inline-block px-3 py-1 rounded-full text-[11px] font-bold text-white"
+            style={{ backgroundColor: brand.color }}
+          >
+            {scene.cta}
+          </span>
+        )}
+      </div>
+
+      {/* 3. Brand footer, present on every frame of the video */}
+      <div
+        className="shrink-0 flex items-center justify-center gap-2 px-3 py-2 bg-white"
+        style={{ borderTop: `3px solid ${brand.color}` }}
+      >
+        <span
+          className="flex items-center justify-center w-7 h-7 rounded-full overflow-hidden shrink-0 border border-black/5"
+          style={{ backgroundColor: brand.logo ? "#F9FAFB" : brand.color }}
+        >
+          {brand.logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={brand.logo} alt="" className="w-full h-full object-contain" />
+          ) : (
+            <span className="text-[10px] font-black text-white">{brandInitials(brand.name)}</span>
+          )}
+        </span>
+        <span className="flex flex-col items-center leading-tight min-w-0">
+          <span className="text-[12px] font-black text-[#111827] truncate max-w-[150px]">
+            {brand.name}
+          </span>
+          <span className="text-[10px] font-semibold truncate max-w-[150px]" style={{ color: brand.color }}>
+            {brand.website}
+          </span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export default function SceneEditorCard({ scene, brand, isLast, aspectRatio, onChange }: Props) {
   const roleStyle = getRoleStyle(scene.role);
   const warnings = copyWarnings(scene);
 
@@ -89,59 +190,64 @@ export default function SceneEditorCard({ scene, isLast, onChange }: Props) {
         </div>
       </div>
 
-      {/* Visual that the scene composites over */}
-      <div className="px-5 pt-5">
-        {scene.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={scene.imageUrl}
-            alt={`Visual for scene ${scene.sceneNumber}`}
-            className="w-full h-32 object-cover rounded-xl border border-slate-200"
-          />
-        ) : (
-          <div className="w-full h-32 flex flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-200 bg-slate-50 text-slate-400">
-            <ImageOff className="w-5 h-5" />
-            <span className="text-[11px] font-semibold">No visual sourced for this scene</span>
-          </div>
-        )}
+      {/* How the scene looks in the video */}
+      <div className="px-5 pt-5 pb-4 bg-[#f8fafd] border-b border-slate-200">
+        <div className="mb-2.5 flex items-center justify-between gap-2">
+          <SectionLabel>Scene preview</SectionLabel>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            {aspectRatio} frame
+          </span>
+        </div>
+        <SceneFrame scene={scene} brand={brand} ratio={ratioOption(aspectRatio)} />
       </div>
 
       {/* Fields */}
       <div className="flex flex-col gap-4 p-5">
-        <Field
-          icon={MessageSquare}
-          label="Headline"
-          value={scene.headline}
-          rows={2}
-          placeholder="Scene headline..."
-          strong
-          onChange={(headline) => onChange({ headline })}
-        />
-        <Field
-          icon={ChevronRight}
-          label="Subtext"
-          value={scene.subtext}
-          rows={2}
-          placeholder="Supporting text..."
-          onChange={(subtext) => onChange({ subtext })}
-        />
-        <Field
-          icon={Mic}
-          label="Voiceover Script"
-          value={scene.voiceover}
-          rows={3}
-          placeholder="Spoken voiceover text..."
-          onChange={(voiceover) => onChange({ voiceover })}
-        />
-        {isLast && (
+        <div className="flex flex-col gap-3">
+          <SectionLabel>On-screen text</SectionLabel>
           <Field
-            icon={Sparkles}
-            label="CTA Button Text"
-            value={scene.cta}
-            placeholder="e.g. Shop Now"
+            icon={MessageSquare}
+            label="Headline"
+            value={scene.headline}
+            rows={2}
+            placeholder="Scene headline..."
             strong
-            onChange={(cta) => onChange({ cta })}
+            onChange={(headline) => onChange({ headline })}
           />
+          <Field
+            icon={ChevronRight}
+            label="Subtext"
+            value={scene.subtext}
+            rows={2}
+            placeholder="Supporting text..."
+            onChange={(subtext) => onChange({ subtext })}
+          />
+        </div>
+
+        <div className="flex flex-col gap-3 pt-1">
+          <SectionLabel>Voiceover</SectionLabel>
+          <Field
+            icon={Mic}
+            label="Spoken script"
+            value={scene.voiceover}
+            rows={3}
+            placeholder="Spoken voiceover text..."
+            onChange={(voiceover) => onChange({ voiceover })}
+          />
+        </div>
+
+        {isLast && (
+          <div className="flex flex-col gap-3 pt-1">
+            <SectionLabel>Footer call to action</SectionLabel>
+            <Field
+              icon={Sparkles}
+              label="CTA Button Text"
+              value={scene.cta}
+              placeholder="e.g. Shop Now"
+              strong
+              onChange={(cta) => onChange({ cta })}
+            />
+          </div>
         )}
 
         {warnings.length > 0 && (

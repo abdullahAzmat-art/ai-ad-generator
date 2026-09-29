@@ -1,6 +1,8 @@
 // Scene copy the editor may change, and the hard ceilings the render engine
 // can actually lay out. The UI warns before these are reached; this module is
 // the last line of defence, because the editor's payload is user input.
+import { DEFAULT_ASPECT_RATIO, isSupportedAspectRatio } from './canvas.js';
+
 const EDITABLE_FIELDS = {
   headline: 90,
   subtext: 150,
@@ -11,7 +13,18 @@ const EDITABLE_FIELDS = {
 // Everything else on a scene — layout, animation, assetRole, durationSec — is
 // chosen by the pipeline and deliberately NOT read from the payload, so a
 // hand-crafted request can never reshape the video or aim the renderer at an
-// arbitrary image.
+// arbitrary image. The frame size IS read, but only as one of the ratios the
+// renderer has a canvas for.
+
+/**
+ * The frame the editor asked to re-render into, or the ratio it already had.
+ *
+ * @param {unknown} value aspect ratio from the resume payload, e.g. "16:9"
+ * @param {string} fallback ratio currently held in graph state
+ */
+export function cleanAspectRatio(value, fallback = DEFAULT_ASPECT_RATIO) {
+  return isSupportedAspectRatio(value) ? value : fallback;
+}
 function cleanText(value, maxChars) {
   const text = (typeof value === 'string' ? value : '')
     .replace(/[\u0000-\u001f\u007f]/g, ' ')
