@@ -12,7 +12,7 @@ import { createCanvas } from '../canvas.js';
 import { brandBar, qrCode, voiceover, fittedPhoto } from './helpers.js';
 
 // Warm premium gold used when the scraped brand color is unavailable.
-const FALLBACK_GOLD = '#C9A24B';
+const FALLBACK_GOLD = '#e2dfda';
 
 // Share of the frame the CTA band claims, and where its copy sits inside it.
 const BAND_SHARE = 0.45;
@@ -72,7 +72,7 @@ export function ctaClose(scene, imageUrl, brandColor, brand = {}, canvas = creat
         ],
         settings: {
           'font-family': 'Montserrat',
-          color: '#FFFFFF',
+          color: '#ece9e9',
           'font-size': `${canvas.px(60)}px`,
           'font-weight': '800',
           'text-align': 'center',

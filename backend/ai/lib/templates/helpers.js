@@ -32,6 +32,8 @@ export function voiceover(text) {
 // photo blurred and covering behind it, so the leftover bars read as designed
 // fill instead of empty letterboxing. `fittedImage` fits one image inside an
 // arbitrary box (logo marks, side panels) with the same no-crop guarantee.
+// Pass `fit: 'cover'` to fill the box edge-to-edge instead (hero images)
+// — the div still clips the overflow, so surrounding layout never gaps.
 //
 // The root div MUST use explicit pixel dimensions, not 100%: JSON2Video's html
 // element doesn't give the content viewport a definite height, so a
@@ -69,9 +71,10 @@ export function fittedPhoto(imageUrl, canvas, opts = {}) {
 
 export function fittedImage(imageUrl, box, opts = {}) {
   const { x, y, width, height } = box;
+  const fit = opts.fit === 'cover' ? 'cover' : 'contain';
   return {
     type: 'html',
-    html: `<div style="width:${width}px;height:${height}px;overflow:hidden;display:flex;align-items:center;justify-content:center;"><img src="${escapeHtml(imageUrl)}" style="width:100%;height:100%;object-fit:contain;object-position:${opts.position || 'center'};" /></div>`,
+    html: `<div style="width:${width}px;height:${height}px;overflow:hidden;display:flex;align-items:center;justify-content:center;"><img src="${escapeHtml(imageUrl)}" style="width:100%;height:100%;object-fit:${fit};object-position:${opts.position || 'center'};" /></div>`,
     x, y, width, height,
     start: opts.start ?? 0,
     duration: opts.duration,
@@ -99,8 +102,8 @@ export function brandBar(brand, duration, canvas = createCanvas()) {
 
   const strip = {
     type: 'html',
-    html: `<div style="width:${canvas.w}px;height:${canvas.barH}px;background:rgba(255,255,255,0.97);border-top:${canvas.px(5)}px solid ${brand.color};display:flex;align-items:center;justify-content:center;padding:0 ${canvas.px(40)}px;gap:${canvas.px(28)}px;box-sizing:border-box;box-shadow:0 ${canvas.px(-6)}px ${canvas.px(36)}px rgba(0,0,0,0.12);">
-      <div style="width:${logoSize}px;height:${logoSize}px;border-radius:${Math.round(logoSize / 2)}px;background:${brand.logo ? '#F9FAFB' : brand.color};display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;border:${canvas.px(3)}px solid rgba(0,0,0,0.07);">
+    html: `<div style="width:${canvas.w}px;height:${canvas.barH}px;background:rgba(240, 231, 231, 0.97);border-top:${canvas.px(5)}px solid ${brand.color};display:flex;align-items:center;justify-content:center;padding:0 ${canvas.px(40)}px;gap:${canvas.px(28)}px;box-sizing:border-box;box-shadow:0 ${canvas.px(-6)}px ${canvas.px(36)}px rgba(0,0,0,0.12);">
+      <div style="width:${logoSize}px;height:${logoSize}px;border-radius:${Math.round(logoSize / 2)}px;background:${brand.logo ? '#e7ecf0' : brand.color};display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;border:${canvas.px(3)}px solid rgba(0,0,0,0.07);">
         ${logoHtml}
       </div>
       <div style="display:flex;flex-direction:column;gap:${canvas.px(6)}px;align-items:center;text-align:center;">

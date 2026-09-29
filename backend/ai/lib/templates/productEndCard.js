@@ -5,17 +5,20 @@
  *   • Logo mark (top of center cluster)
  *   • Bold brand name
  *   • CTA line (phone / WhatsApp / website)
- *   • Website URL (brand accent)
+ *   • Website URL (ebony accent)
  * The cluster is measured on the story frame and centred on whatever canvas
  * this renders to, so it stays a single balanced block at 1:1 and 16:9 too.
- * Persistent top-right QR code + bottom brand strip from helpers.
+ *
+ * No QR code and no bottom brand strip here: product ads get movie-level
+ * chrome (top bar + bottom color strip) from render.node.js that already
+ * persists on every scene, including this one.
  *
  * The logo sits in an object-fit:contain box, so any logo shape — square,
  * wide, tall — lands uncut and undistorted at every aspect ratio.
  */
 
 import { createCanvas } from '../canvas.js';
-import { brandBar, qrCode, voiceover, fittedImage } from './helpers.js';
+import { voiceover, fittedImage } from './helpers.js';
 
 // Vertical rhythm of the cluster, measured on the 1080x1920 story frame.
 const CLUSTER = {
@@ -39,10 +42,10 @@ export function productEndCard(scene, brand, canvas = createCanvas()) {
     transition: { type: 'fade', duration: 0.6 },
     elements: [
 
-      // 1. Soft gradient background — same language as showcase scenes
+      // 1. Warm off-white backdrop — same language as showcase scenes
       {
         type: 'html',
-        html: `<div style="width:${canvas.w}px;height:${canvas.h}px;background:linear-gradient(160deg,#FFFFFF 0%,#F3F4F6 55%,#E8E9EC 100%);"></div>`,
+        html: `<div style="width:${canvas.w}px;height:${canvas.h}px;background:#FAF7F2;"></div>`,
         x: 0,
         y: 0,
         width: canvas.w,
@@ -54,7 +57,7 @@ export function productEndCard(scene, brand, canvas = createCanvas()) {
       // 2. Thin accent line — centered, above the cluster
       {
         type: 'html',
-        html: `<div style="width:${px(80)}px;height:${px(3)}px;background:${brand.color};border-radius:2px;"></div>`,
+        html: `<div style="width:${px(80)}px;height:${px(3)}px;background:#1A1A1A;border-radius:2px;"></div>`,
         x: ruleX,
         y: clusterTop - px(40),
         width: px(80),
@@ -114,7 +117,7 @@ export function productEndCard(scene, brand, canvas = createCanvas()) {
         'fade-in': 0.35,
       },
 
-      // 6. Contact / website — brand accent
+      // 6. Contact / website — ebony accent
       ...(contact ? [{
         type: 'text',
         text: contact,
@@ -126,7 +129,7 @@ export function productEndCard(scene, brand, canvas = createCanvas()) {
         duration: Math.max(0, duration - 0.5),
         settings: {
           'font-family': 'Montserrat',
-          color: brand.color,
+          color: '#1A1A1A',
           'font-size': `${px(36)}px`,
           'font-weight': '700',
           'text-align': 'center',
@@ -137,7 +140,7 @@ export function productEndCard(scene, brand, canvas = createCanvas()) {
       // 7. Thin bottom accent line
       {
         type: 'html',
-        html: `<div style="width:${px(80)}px;height:${px(3)}px;background:${brand.color};border-radius:2px;"></div>`,
+        html: `<div style="width:${px(80)}px;height:${px(3)}px;background:#1A1A1A;border-radius:2px;"></div>`,
         x: ruleX,
         y: clusterTop + px(shape.rule),
         width: px(80),
@@ -147,13 +150,7 @@ export function productEndCard(scene, brand, canvas = createCanvas()) {
         'fade-in': 0.4,
       },
 
-      // 8. Persistent bottom brand strip
-      ...brandBar(brand, duration, canvas),
-
-      // 9. Persistent top-right QR code
-      ...qrCode(brand, duration, canvas),
-
-      // 10. Voiceover
+      // 8. Voiceover
       voiceover(scene.voiceover),
     ],
   };

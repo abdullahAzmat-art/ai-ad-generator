@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { createCanvas } from '../lib/canvas.js';
+import { productChrome } from '../lib/templates/productShowcase.js';
 
 async function resolveImageUrl(scene, assets, stockImages, sceneIndex) {
   const role = scene.assetRole;
@@ -206,7 +207,10 @@ export async function renderNode(state) {
         duration: totalDuration,
         'fade-in': 1.5,
         'fade-out': 2.5
-      }
+      },
+      // Product ads carry movie-level brand chrome (top bar + bottom strip)
+      // that persists on every scene, including the end card.
+      ...(brand.adType === 'product' ? productChrome(brand, totalDuration, canvas) : []),
     ],
     scenes,
   };
