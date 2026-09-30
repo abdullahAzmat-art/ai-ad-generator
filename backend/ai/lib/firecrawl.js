@@ -157,6 +157,69 @@ export async function scrapeUrl(url) {
         : DEFAULT_BRAND_COLOR,
     };
   } catch (error) {
+    console.warn(`[Scrape] Firecrawl failed: ${error.message} — attempting fallback to ScraperAPI...`);
+    if (process.env.SCRAPERAPI_KEY) {
+      try {
+        return await scrapeWithScraperApi(url);
+      } catch (scraperErr) {
+        throw new Error(`Firecrawl scrape failed, and ScraperAPI fallback also failed: ${scraperErr.message}`, { cause: scraperErr });
+      }
+    }
     throw new Error(`Firecrawl scrape failed: ${error.message}`, { cause: error });
   }
+}
+
+async function scrapeWithScraperApi(url) {
+  let cheerio;
+  try {
+    cheerio = await import('cheerio');
+  } catch {
+    throw new Error('cheerio is required for ScraperAPI fallback. Install it via npm install cheerio');
+  }
+  
+  const scraperApiUrl = `http://api.scraperapi.com?api_key=${process.env.SCRAPERAPI_KEY}&url=${encodeURIComponent(url)}`;
+  const response = await fetch(scraperApiUrl);
+  if (!response.ok) {
+    throw new Error(`ScraperAPI returned HTTP ${response.status}`);
+  }
+  
+  const html = await response.text();
+  const $ = cheerio.load(html);
+  
+  const title = $('title').text() || $('meta[property="og:title"]').attr('content') || '';
+  const description = $('meta[name="description"]').attr('content') || $('meta[property="og:description"]').attr('content') || '';
+  const ogImage = $('meta[property="og:image"]').attr('content');
+  
+  // Extract text roughly like markdown
+  $('script, style, noscript, iframe, img, svg').remove();
+  const pageText = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 4000);
+  
+  // Reload HTML to extract images
+  const $2 = cheerio.load(html);
+  const rawImages = [];
+  if (ogImage) rawImages.push(ogImage);
+  
+  $2('img').each((_, el) => {
+    const src = $2(el).attr('src') || $2(el).attr('data-src');
+    if (src) rawImages.push(src);
+  });
+  
+  const allImageUrls = absolutizeImages(rawImages, url).filter(Boolean);
+  const candidateImages = allImageUrls
+    .filter((image, index, values) => values.indexOf(image) === index)
+    .filter(isUsableImage)
+    .slice(0, MAX_IMAGE_PROBES);
+    
+  const goodImages = await filterGoodImages(candidateImages, { limit: MAX_FINAL_IMAGES });
+  
+  console.log(`[Scrape] ScraperAPI fallback found ${allImageUrls.length} images, ${candidateImages.length} candidates, ${goodImages.length} usable.`);
+  
+  return {
+    title,
+    description,
+    pageText,
+    images: goodImages,
+    logo: await resolveLogo({}, [ogImage, ...allImageUrls].filter(Boolean)),
+    brandColor: DEFAULT_BRAND_COLOR
+  };
 }

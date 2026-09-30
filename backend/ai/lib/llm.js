@@ -60,6 +60,20 @@ export function getLlmClient() {
           }
           // `reasoning` is an OpenRouter-only parameter; Groq rejects it with a 400.
           const { reasoning: _reasoning, ...groqParams } = params;
+          if (Array.isArray(groqParams.messages)) {
+            groqParams.messages = groqParams.messages.map((m) => {
+              if (Array.isArray(m?.content)) {
+                return {
+                  ...m,
+                  content: m.content
+                    .map((part) => (typeof part === 'string' ? part : part?.text || ''))
+                    .filter(Boolean)
+                    .join('\n'),
+                };
+              }
+              return m;
+            });
+          }
           return getGroqClient().chat.completions.create({ ...groqParams, model: groqModel || GROQ_STRONG_MODEL });
         },
       },
