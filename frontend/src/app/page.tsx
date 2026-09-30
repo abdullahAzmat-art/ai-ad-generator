@@ -7,6 +7,7 @@ import HdQualitySection from "@/components/HdQualitySection";
 import WhyChooseUsSection from "@/components/WhyChooseUsSection";
 import CtaSection from "@/components/CtaSection";
 import Footer from "@/components/Footer";
+import SmoothScrollProvider from "@/components/SmoothScrollProvider";
 
 export default function Home() {
   // IntersectionObserver hook for smooth scroll reveal across all sections
@@ -29,24 +30,26 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#f8fafd] text-[#0a1945] flex flex-col font-sans selection:bg-blue-800 selection:text-white">
-      {/* 1. Hero Section (Input form, moving ball, dark navy ambient smoke) */}
-      <HeroSection />
+    <SmoothScrollProvider>
+      <div className="min-h-screen bg-[#f8fafd] text-[#0a1945] flex flex-col font-sans selection:bg-blue-800 selection:text-white">
+        {/* 1. Hero Section (Input form, moving ball, dark navy ambient smoke) */}
+        <HeroSection />
 
-      {/* 2. How It Works Section (01 -> 02 -> 03 Steps) */}
-      <HowItWorksSection />
+        {/* 2. How It Works Section (01 -> 02 -> 03 Steps) */}
+        <HowItWorksSection />
 
-      {/* 3. HD Quality Ads Section */}
-      <HdQualitySection />
+        {/* 3. HD Quality Ads Section */}
+        <HdQualitySection />
 
-      {/* 4. Why Choose Us Section */}
-      <WhyChooseUsSection />
+        {/* 4. Why Choose Us Section */}
+        <WhyChooseUsSection />
 
-      {/* 5. Call To Action (Bottom section) */}
-      <CtaSection />
+        {/* 5. Call To Action (Bottom section) */}
+        <CtaSection />
 
-      {/* 6. Footer */}
-      <Footer />
-    </div>
+        {/* 6. Footer */}
+        <Footer />
+      </div>
+    </SmoothScrollProvider>
   );
 }

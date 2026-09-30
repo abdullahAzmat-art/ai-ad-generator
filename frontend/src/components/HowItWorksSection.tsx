@@ -26,12 +26,16 @@ export default function HowItWorksSection() {
   return (
     <section className="relative py-24 sm:py-32 px-4 overflow-hidden border-t border-blue-100/80 bg-[#f8fafd]">
       {/* Background Ambient Tint */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-[#dbeafe] rounded-full blur-[180px] opacity-40 pointer-events-none" />
+      <div
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-[#dbeafe] rounded-full blur-[180px] opacity-40 pointer-events-none"
+        data-scroll
+        data-scroll-speed="1"
+      />
 
       <div className="relative z-10 max-w-6xl mx-auto">
-        
+
         {/* Section Header */}
-        <div className="text-center mb-16 sm:mb-20" data-animate="fade-up">
+        <div className="text-center mb-16 sm:mb-20" data-animate="fade-blur">
           <span className="text-blue-800 font-semibold tracking-[0.22em] text-xs sm:text-sm uppercase mb-3 block">
             The Process
           </span>

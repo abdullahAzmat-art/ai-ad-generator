@@ -253,9 +253,17 @@ select {
   transform: translateX(-40px);
 }
 
+[data-animate="fade-blur"] {
+  transform: translateY(30px) scale(0.98);
+  filter: blur(10px);
+  transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1), filter 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform, filter;
+}
+
 [data-animate].is-visible {
   opacity: 1 !important;
   transform: none !important;
+  filter: blur(0) !important;
 }
 
 /* Autofill styling */

@@ -2,11 +2,21 @@
 
 import React from "react";
 import { ArrowRight } from "lucide-react";
+import { getSmoothScroll } from "@/lib/smoothScroll";
 
 export default function CtaSection() {
   const scrollToTop = (e: React.MouseEvent) => {
     e.preventDefault();
     const input = document.getElementById("url-input");
+    const smooth = getSmoothScroll();
+    if (smooth && input) {
+      smooth.scrollTo(input, {
+        offset: -Math.round(window.innerHeight / 2) + input.offsetHeight / 2,
+        duration: 1.4,
+        onComplete: () => input.focus(),
+      });
+      return;
+    }
     if (input) {
       input.scrollIntoView({ behavior: "smooth", block: "center" });
       input.focus();
@@ -17,9 +27,13 @@ export default function CtaSection() {
 
   return (
     <section className="relative py-28 sm:py-36 px-4 text-center overflow-hidden border-t border-blue-100/80 bg-[#f8fafd]">
-      
+
       {/* Background Ambient Tint */}
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[750px] h-[360px] bg-[#dbeafe] rounded-full blur-[180px] opacity-60 pointer-events-none" />
+      <div
+        className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[750px] h-[360px] bg-[#dbeafe] rounded-full blur-[180px] opacity-60 pointer-events-none"
+        data-scroll
+        data-scroll-speed="0.7"
+      />
 
       <div className="relative z-10 max-w-3xl mx-auto" data-animate="fade-up">
         

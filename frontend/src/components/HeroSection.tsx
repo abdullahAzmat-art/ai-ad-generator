@@ -18,7 +18,11 @@ export default function HeroSection() {
     <section className="min-h-svh flex flex-col items-center justify-center relative overflow-hidden px-4 sm:px-6 lg:px-8 pt-20 pb-16 sm:pt-24 sm:pb-24">
 
       {/* Ambient Soft Navy Blue Cloud Background for Off-White Theme */}
-      <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none">
+      <div
+        className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none"
+        data-scroll
+        data-scroll-speed="0.5"
+      >
         <div className="relative w-full max-w-[1100px] h-[420px] sm:h-[550px] lg:h-[650px] flex items-center justify-center">
           {/* Base light navy ambient tint */}
           <div className="absolute w-[95vw] max-w-[800px] h-[280px] sm:h-[420px] bg-[#dbeafe] rounded-[100%] blur-[90px] sm:blur-[130px] opacity-75 animate-smoke" />

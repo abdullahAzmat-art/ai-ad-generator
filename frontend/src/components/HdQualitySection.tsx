@@ -30,8 +30,16 @@ export default function HdQualitySection() {
       
       {/* Background Ambient Tints */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
-        <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[500px] h-[500px] bg-[#dbeafe] rounded-full blur-[190px] opacity-60" />
-        <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[450px] h-[450px] bg-[#e0e7ff] rounded-full blur-[190px] opacity-50" />
+        <div
+          className="absolute top-1/2 left-0 -translate-y-1/2 w-[500px] h-[500px] bg-[#dbeafe] rounded-full blur-[190px] opacity-60"
+          data-scroll
+          data-scroll-speed="0.6"
+        />
+        <div
+          className="absolute top-1/2 right-0 -translate-y-1/2 w-[450px] h-[450px] bg-[#e0e7ff] rounded-full blur-[190px] opacity-50"
+          data-scroll
+          data-scroll-speed="0.9"
+        />
       </div>
 
       <div className="relative z-10 max-w-6xl mx-auto">
@@ -51,6 +59,7 @@ export default function HdQualitySection() {
             </p>
             <a
               href="#url-input"
+              data-scroll-to
               className="inline-flex items-center gap-2.5 px-8 py-4 rounded-full font-bold text-white bg-[#0a1945] hover:bg-[#0f2873] transition-all duration-300 shadow-[0_8px_25px_rgba(10,25,70,0.2)] hover:shadow-[0_12px_30px_rgba(10,25,70,0.3)] hover:-translate-y-0.5 text-base border border-blue-900/20"
             >
               <span>See Sample Ads</span>

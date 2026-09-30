@@ -1,3 +1,9 @@
+---
+title: US Client Vibe Backend
+sdk: docker
+app_port: 7860
+---
+
 # Backend
 
 Node.js and Express API for the US Client Vibe application.

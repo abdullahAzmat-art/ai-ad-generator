@@ -20,6 +20,7 @@ import type { LucideIcon } from "lucide-react";
 import { writeScrapeCache } from "../lib/scrapeCache";
 import { generateAdOnce } from "../lib/api";
 import { downloadVideo } from "../lib/downloadVideo";
+import { getSmoothScroll } from "../lib/smoothScroll";
 import type { ScrapeData } from "../lib/adScenes";
 
 interface Stage {
@@ -126,12 +127,15 @@ export default function GenerateAdModal({ url, onClose }: { url: string; onClose
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
+    const smooth = getSmoothScroll();
+    smooth?.stop();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = "";
+      smooth?.start();
       window.removeEventListener("keydown", onKey);
     };
   }, [onClose]);
@@ -187,7 +191,7 @@ export default function GenerateAdModal({ url, onClose }: { url: string; onClose
        
 
         {/* Body */}
-        <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-y-auto">
+        <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-y-auto" data-lenis-prevent>
           {/* LEFT — stage area */}
           <div className="flex-1 flex items-center justify-center p-6 sm:p-8 min-h-[400px]">
             {phase === "error" ? (
