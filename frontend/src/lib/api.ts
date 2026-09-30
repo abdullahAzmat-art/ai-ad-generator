@@ -6,7 +6,14 @@ import {
   type SceneCard,
 } from "./adScenes";
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+// Base path for every backend call.
+// - Local dev: unset NEXT_PUBLIC_API_URL → same-origin "/api", which Next.js
+//   proxies to the backend via the rewrites in next.config.ts (BACKEND_URL).
+// - Production: set NEXT_PUBLIC_API_URL (e.g. https://your-app.onrender.com/api)
+//   so the browser calls the backend DIRECTLY. Vercel's proxy would kill any
+//   request longer than 5 minutes, and the generation pipeline can run that
+//   long. The backend's CORS is open to all origins, so direct calls work.
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 async function post<T extends { error?: string | null }>(
   path: string,
